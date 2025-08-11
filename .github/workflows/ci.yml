@@ -25,8 +25,8 @@ jobs:
         run: npx tsc --noEmit
       - name: Build
         run: npm run build
-      - name: Export static site
-        run: npm run export
+      - name: Copy static files
+        run: node scripts/copy-static.js
       - name: List exported files (debug)
         run: |
           echo "Exported artifact contents:" && ls -R out | head -n 100
