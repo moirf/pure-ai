@@ -1,0 +1,38 @@
+---
+slug: developer-portfolio-platform
+title: Developer Portfolio & Content Platform
+summary: Static-first personal site with MDX content pipeline & automated performance checks.
+role: Solo Engineer
+dateStart: 2025-07
+Tags: [nextjs, performance, platform]
+stack: [Next.js, TypeScript, Tailwind, GitHub Pages]
+highlights:
+  - App Router static export assembly for GitHub Pages
+  - Lightweight content model (MDX + gray-matter)
+  - CI artifact integrity checks (CSS presence, static assembly)
+impactMetrics:
+  - { label: Local Build Time, value: '<10s' }
+  - { label: Core JS First Load, value: '~87kB' }
+links:
+  repo: https://github.com/moirf/pure-ai
+---
+
+## Overview
+
+This platform powers the personal engineering site, focusing on fast static delivery, low coupling, and simple authoring.
+
+## Architecture
+
+- Next.js App Router with output export for fully static artifact.
+- MDX content loaded at build for deterministic deploys.
+- Minimal custom scripts assemble static assets for GitHub Pages.
+
+## Outcomes
+
+Fast iteration enabling rapid additions (galleries, projects) with minimal churn. Baseline for future performance instrumentation & automated budgets.
+
+## Next Steps
+
+- Add RSS feed generation.
+- Fetch live GitHub repo metadata for OSS section.
+- Pre-build image optimization pipeline.

@@ -1,12 +1,13 @@
 
 import Link from 'next/link';
+import { siteConfig } from '../config/site';
 
 export default function HomePage() {
   return (
     <section className="space-y-10 py-8">
       <div>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Hi, I’m <span className="text-brand">Your Name</span>.</h1>
-        <p className="mt-4 max-w-2xl text-neutral-600 dark:text-neutral-300">I build performant, accessible web platforms and developer tooling. This site hosts selected projects, experience, and writing.</p>
+  <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Hi, I’m <span className="text-brand">{siteConfig.ownerName}</span>.</h1>
+  <p className="mt-4 max-w-2xl text-neutral-600 dark:text-neutral-300">{siteConfig.summary}</p>
       </div>
       <div className="grid gap-6 md:grid-cols-3">
         <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-800">

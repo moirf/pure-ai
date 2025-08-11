@@ -19,24 +19,35 @@ export interface SiteConfig {
   domain: string;
   contact: ContactInfo;
   oss: OSSRepo[];
+  ownerName: string;
+  headline: string;
+  summary: string;
 }
 
 export const siteConfig: SiteConfig = {
   siteName: 'moirf.works',
   domain: 'moirf.works',
+  ownerName: 'Mohammad Irfan',
+  headline: 'Senior Software Engineer • Performance, DX & Platform Reliability',
+  summary: 'Engineer focused on web performance, platform reliability, and developer experience. I turn slow, fragile delivery loops into fast, observable, sustainable systems.',
   contact: {
-    email: 'you@example.com',
-    github: 'your-handle',
-    linkedin: 'your-linkedin-handle',
-    location: 'Remote'
+    email: 'moirf8@gmail.com',
+    github: 'moirf',
+    linkedin: 'https://www.linkedin.com/in/moirf',
+    location: 'Redmond, USA'
   },
   oss: [
     {
-      name: 'sample-repo',
-      description: 'Example contribution or maintained repo',
-      url: 'https://github.com/your-handle/sample-repo',
-      stars: 120,
+      name: 'pure-ai',
+      description: 'Personal developer portfolio & static site (this project).',
+      url: 'https://github.com/moirf/pure-ai',
       highlight: true
+    },
+    {
+      name: 'oss-contributions',
+      description: 'Selected open-source issue triage & patch contributions (placeholder).',
+      url: 'https://github.com/moirf',
+      highlight: false
     }
   ]
 };
