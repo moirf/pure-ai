@@ -1,3 +1,8 @@
+
+import Link from 'next/link';
+import getConfig from 'next/config';
+const basePath = (getConfig().publicRuntimeConfig && getConfig().publicRuntimeConfig.basePath) || '';
+
 export default function HomePage() {
   return (
     <section className="space-y-10 py-8">
@@ -20,9 +25,6 @@ export default function HomePage() {
           <h2 className="font-semibold">Writing</h2>
             <p className="text-sm mt-1 text-neutral-600 dark:text-neutral-400">Articles & notes on performance, DX, and automation.</p>
           <Link className="text-sm mt-2 inline-block text-brand hover:underline" href={`${basePath}/blog/`}>View Blog →</Link>
-import Link from 'next/link';
-import getConfig from 'next/config';
-const basePath = (getConfig().publicRuntimeConfig && getConfig().publicRuntimeConfig.basePath) || '';
         </div>
       </div>
     </section>
