@@ -1,8 +1,10 @@
-import { getGalleries } from '@/lib/content/loadGalleries';
+import { getGalleries } from '../../lib/content/loadGalleries';
 import Link from 'next/link';
 
+
+// This is a server component
 export default function GalleriesPage() {
-  const galleries = getGalleries();
+  const galleries: { slug: string; title: string; description?: string }[] = getGalleries();
   return (
     <main className="prose mx-auto p-8">
       <h1>Photo Galleries</h1>

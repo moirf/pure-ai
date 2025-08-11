@@ -11,7 +11,8 @@ export function getGalleries() {
     const { data } = matter(source);
     return {
       slug: filename.replace(/\.mdx$/, ''),
-      ...data,
+      title: data.title || filename.replace(/\.mdx$/, ''),
+      description: data.description || '',
     };
   });
 }
