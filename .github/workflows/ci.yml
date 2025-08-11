@@ -27,6 +27,8 @@ jobs:
         run: npm run build
       - name: Copy static files
         run: node scripts/copy-static.js
+      - name: Check for CSS in static export
+        run: node scripts/check-css.js
       - name: List exported files (debug)
         run: |
           echo "Exported artifact contents:" && ls -R out | head -n 100

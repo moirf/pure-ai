@@ -33,6 +33,8 @@ jobs:
         run: npm run build
       - name: Copy static files
         run: node scripts/copy-static.js
+      - name: Check for CSS in static export
+        run: node scripts/check-css.js
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
