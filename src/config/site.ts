@@ -28,8 +28,8 @@ export const siteConfig: SiteConfig = {
   siteName: 'moirf.works',
   domain: 'moirf.works',
   ownerName: 'Mohammad Irfan',
-  headline: 'Senior Software Engineer • Performance, DX & Platform Reliability',
-  summary: 'Engineer focused on web performance, platform reliability, and developer experience. I turn slow, fragile delivery loops into fast, observable, sustainable systems.',
+  headline: 'Senior Technical Manager at HCLTech',
+  summary: 'Senior Technical Manager at HCLTech, specializing in designing and delivering enterprise cloud solutions. Holds Microsoft certifications as an Azure Solutions Architect and DevOps Engineer Expert, with proven expertise in cloud architecture, automation, and end-to-end DevOps practices.',
   contact: {
     email: 'moirf8@gmail.com',
     github: 'moirf',
