@@ -98,14 +98,14 @@ export default function ContactForm() {
       <div>
         <h2 className="text-xl font-semibold mb-2">Send a Message</h2>
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Use the form below to send me a direct email. I'll get back to you as soon as possible.
+          Use the form below to send me a direct email. I&apos;ll get back to you as soon as possible.
         </p>
       </div>
 
       {submitStatus === 'success' && (
         <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
           <p className="text-green-700 dark:text-green-300 text-sm">
-            ✓ Message sent successfully! I'll get back to you soon.
+            ✓ Message sent successfully! I&apos;ll get back to you soon.
           </p>
         </div>
       )}
