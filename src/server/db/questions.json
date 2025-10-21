@@ -1,0 +1,36 @@
+[
+  {
+    "id": "q1",
+    "text": "What is the capital of France?",
+    "choices": [
+      { "id": "c1", "text": "Paris" },
+      { "id": "c2", "text": "London" },
+      { "id": "c3", "text": "Berlin" }
+    ],
+    "correct": ["c1"],
+    "type": "single"
+  },
+  {
+    "id": "q2",
+    "text": "Which of the following are programming languages?",
+    "choices": [
+      { "id": "c1", "text": "Python" },
+      { "id": "c2", "text": "HTML" },
+      { "id": "c3", "text": "JavaScript" },
+      { "id": "c4", "text": "CSS" }
+    ],
+    "correct": ["c1", "c3"],
+    "type": "multiple"
+  },
+  {
+    "id": "q3",
+    "text": "What is 2 + 2?",
+    "choices": [
+      { "id": "c1", "text": "3" },
+      { "id": "c2", "text": "4" },
+      { "id": "c3", "text": "5" }
+    ],
+    "correct": ["c2"],
+    "type": "single"
+  }
+]
