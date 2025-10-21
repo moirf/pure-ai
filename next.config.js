@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
-  trailingSlash: false, // Optional, based on your preference
+  output: 'export',
+  trailingSlash: true,
   images: {
     unoptimized: true
   }
