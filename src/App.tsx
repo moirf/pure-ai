@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import HomePage from './components/pages/HomePage';
 import Quiz from './components/Quiz';
-import GalleriesPage from './app/galleries/page';
+import GalleriesPage from './components/pages/GalleriesPage';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<'home' | 'quiz' | 'galleries'>('home');
