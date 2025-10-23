@@ -1,0 +1,44 @@
+[
+  {
+    "id": "1",
+    "title": "Gallery App",
+    "description": "A photo gallery app built with React.",
+    "img": "https://via.placeholder.com/1200x600?text=Gallery+App",
+    "thumbnail": "https://via.placeholder.com/400x240?text=Gallery+App"
+  },
+  {
+    "id": "2",
+    "title": "Quiz Engine",
+    "description": "An interactive quiz system with scoring.",
+    "img": "https://via.placeholder.com/1200x600?text=Quiz+Engine",
+    "thumbnail": "https://via.placeholder.com/400x240?text=Quiz+Engine"
+  },
+  {
+    "id": "3",
+    "title": "Portfolio Site",
+    "description": "A personal portfolio site.",
+    "img": "https://via.placeholder.com/1200x600?text=Portfolio",
+    "thumbnail": "https://via.placeholder.com/400x240?text=Portfolio"
+  },
+    {
+    "id": "4",
+    "title": "Gallery App",
+    "description": "A photo gallery app built with React.",
+    "img": "https://via.placeholder.com/1200x600?text=Gallery+App",
+    "thumbnail": "https://via.placeholder.com/400x240?text=Gallery+App"
+  },
+  {
+    "id": "5",
+    "title": "Quiz Engine",
+    "description": "An interactive quiz system with scoring.",
+    "img": "https://via.placeholder.com/1200x600?text=Quiz+Engine",
+    "thumbnail": "https://via.placeholder.com/400x240?text=Quiz+Engine"
+  },
+  {
+    "id": "6",
+    "title": "Portfolio Site",
+    "description": "A personal portfolio site.",
+    "img": "https://via.placeholder.com/1200x600?text=Portfolio",
+    "thumbnail": "https://via.placeholder.com/400x240?text=Portfolio"
+  }
+]

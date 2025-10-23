@@ -4,6 +4,8 @@ import HomePage from './components/pages/HomePage';
 import Quiz from './components/Quiz';
 import GalleriesPage from './components/pages/GalleriesPage';
 import ProfilePage from './components/pages/ProfilePage';
+import ProjectsPage from './components/pages/ProjectsPage';
+import ProjectDetail from './components/pages/ProjectDetail';
 import Header from './components/Header';
 
 const App: React.FC = () => {
@@ -18,6 +20,8 @@ const App: React.FC = () => {
             <Route path="/quiz" element={<Quiz />} />
             <Route path="/galleries" element={<GalleriesPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects/:id" element={<ProjectDetail />} />
           </Routes>
         </div>
       </main>
