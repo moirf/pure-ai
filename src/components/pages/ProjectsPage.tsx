@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import ImageWithSkeleton from '../ImageWithSkeleton';
 
 type Project = { id: string; title: string; description?: string; img?: string; thumbnail?: string };
 
@@ -9,7 +10,7 @@ const ProjectsPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/projects/projects.json');
+        const res = await fetch('/api/projects');
         const data = await res.json();
         setProjects(data);
       } catch (err) {
@@ -25,7 +26,7 @@ const ProjectsPage: React.FC = () => {
       <div className="grid md:grid-cols-3 gap-4">
         {projects.map((p) => (
           <Link key={p.id} to={`/projects/${p.id}`} className="block border rounded overflow-hidden hover:shadow">
-            <img src={p.thumbnail} alt={p.title} className="w-full h-40 object-cover" loading="lazy" />
+            <ImageWithSkeleton src={`/projects/${p.id}/thumbnail.jpg`} alt={p.title} className="w-full h-40 object-cover block" fallbackSrc={p.thumbnail} />
             <div className="p-3 bg-white">
               <div className="font-semibold">{p.title}</div>
               <div className="text-sm text-gray-600">{p.description}</div>
