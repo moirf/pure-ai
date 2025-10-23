@@ -1,12 +1,11 @@
 {
-  "name": "pure-ai",
+  "name": "quiz-app",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
     "next": "14.2.4",
@@ -23,8 +22,8 @@
     "tailwindcss": "3.4.4",
     "typescript": "5.4.5",
     "eslint": "8.57.0",
-  "eslint-config-next": "14.2.4",
-  "@mdx-js/loader": "3.0.1",
-  "@mdx-js/react": "3.0.1"
-  }
+    "vite": "^4.0.0",
+    "@vitejs/plugin-react": "^4.0.0"
+  },
+  "eslint-config-next": "14.2.4"
 }

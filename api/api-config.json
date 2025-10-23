@@ -1,0 +1,4 @@
+{
+  "apiGatewayEndpoint": "https://your-api-endpoint.com/questions",
+  "lambdaFunctionName": "quiz-api-handler"
+}

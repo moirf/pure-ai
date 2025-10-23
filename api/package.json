@@ -1,0 +1,16 @@
+{
+  "name": "quiz-api",
+  "version": "1.0.0",
+  "description": "Lambda function for quiz questions",
+  "main": "dist/handler.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "dependencies": {
+    "@types/aws-lambda": "^8.10.119"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
