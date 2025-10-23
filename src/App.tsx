@@ -1,22 +1,26 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
 import HomePage from './components/pages/HomePage';
 import Quiz from './components/Quiz';
 import GalleriesPage from './components/pages/GalleriesPage';
+import ProfilePage from './components/pages/ProfilePage';
+import Header from './components/Header';
 
 const App: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState<'home' | 'quiz' | 'galleries'>('home');
-
   return (
     <div>
-      <h1>Developer Profile</h1>
-      <nav>
-        <button onClick={() => setCurrentPage('home')}>Home</button>
-        <button onClick={() => setCurrentPage('quiz')}>Quiz</button>
-        <button onClick={() => setCurrentPage('galleries')}>Photo Galleries</button>
-      </nav>
-      {currentPage === 'home' && <HomePage />}
-      {currentPage === 'quiz' && <Quiz />}
-      {currentPage === 'galleries' && <GalleriesPage />}
+      <Header />
+
+      <main className="py-6">
+        <div className="max-w-6xl mx-auto px-4">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/quiz" element={<Quiz />} />
+            <Route path="/galleries" element={<GalleriesPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Routes>
+        </div>
+      </main>
     </div>
   );
 };
