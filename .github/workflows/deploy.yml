@@ -97,7 +97,7 @@ jobs:
       - name: Update Lambda function code
         env:
           LAMBDA_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_REGION: ${{ secrets.AWS_REGION2 }}
         run: |
           if [ -z "$LAMBDA_NAME" ]; then echo "LAMBDA_FUNCTION_NAME secret is not set"; exit 1; fi
           aws lambda update-function-code --function-name "$LAMBDA_NAME" --zip-file fileb://function.zip --region "$AWS_REGION"
