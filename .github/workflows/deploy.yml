@@ -1,51 +1,35 @@
-name: GitHub Pages Deployment
+name: Deploy to S3
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
+    branches:
+      - main   # deploy on push to main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
-      - name: Setup Node
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
-      - name: Install deps
-        run: npm ci
-      - name: Lint
-        run: npm run lint --if-present || echo "Lint skipped"
-      - name: Build
-        run: npm run build
-      - name: Copy static files
-        run: node scripts/copy-static.js
-      - name: Check for CSS in static export
-        run: node scripts/check-css.js
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+          node-version: '20'
+
+      - name: Install dependencies and build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to S3
+        uses: jakejarvis/s3-sync-action@v0.5.1
         with:
-          path: ./out
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          args: --delete
+        env:
+          AWS_S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SOURCE_DIR: 'dist'  # or 'build' if using React
