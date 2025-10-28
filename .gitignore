@@ -44,3 +44,4 @@ public/build/
 .cache/
 # Optional: local generated assets
 assets/build/
+tsconfig.tsbuildinfo
