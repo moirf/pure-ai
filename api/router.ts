@@ -28,8 +28,28 @@ export function register(method: string, pattern: string, handler: RouteHandler)
 }
 
 export async function route(event: APIGatewayEvent): Promise<APIGatewayProxyResult> {
-  const method = (event.httpMethod || (event.requestContext && (event.requestContext as any).http?.method) || 'GET').toUpperCase();
-  const path = event.path || '/';
+  // Normalize method from REST (httpMethod) or HTTP API (requestContext.http.method)
+  const method = (
+    (event.httpMethod as string | undefined) ||
+    ((event.requestContext as any)?.http?.method as string | undefined) ||
+    'GET'
+  ).toUpperCase();
+
+  // Normalize path: REST uses event.path, HTTP API v2 uses event.rawPath; API Gateway may also include stage in path
+  let path: string = (event.path as string) || ((event as any).rawPath as string) || ((event.requestContext as any)?.http?.path as string) || '/';
+
+  // If API Gateway stage is present as a prefix (e.g. /dev/...), strip it for matching
+  const stage = (event.requestContext as any)?.stage as string | undefined;
+  if (stage && path.startsWith(`/${stage}/`)) {
+    path = path.replace(`/${stage}`, '');
+  }
+
+  // Normalize trailing slash (treat /foo and /foo/ as equal)
+  if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+
+  // Debug log to help diagnose 404s
+  console.log('Router incoming:', { method, path });
+  console.log('Registered routes:', routes.map(r => `${r.method} ${r.pattern}`));
 
   for (const r of routes) {
     if (r.method !== method) continue;
@@ -62,6 +82,6 @@ export async function route(event: APIGatewayEvent): Promise<APIGatewayProxyResu
   return {
     statusCode: 404,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ error: 'Not found' })
+    body: JSON.stringify({ error: '404: Route Not found' })
   };
 }
