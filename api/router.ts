@@ -44,6 +44,20 @@ export async function route(event: APIGatewayEvent): Promise<APIGatewayProxyResu
     path = path.replace(`/${stage}`, '');
   }
 
+  // If the API is mounted under a prefix (for example CloudFront or gateway uses `/api`),
+  // allow stripping a configurable prefix so handlers register plain routes like `/projects`.
+  // Set the environment variable API_PREFIX to the prefix you want stripped (e.g. '/api').
+  const apiPrefix = (process.env.API_PREFIX || '').trim();
+  if (apiPrefix) {
+    // ensure prefix starts with '/'
+    const normalizedPrefix = apiPrefix.startsWith('/') ? apiPrefix : `/${apiPrefix}`;
+    if (path === normalizedPrefix) {
+      path = '/';
+    } else if (path.startsWith(normalizedPrefix + '/')) {
+      path = path.slice(normalizedPrefix.length) || '/';
+    }
+  }
+
   // Normalize trailing slash (treat /foo and /foo/ as equal)
   if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
 
