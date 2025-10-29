@@ -66,11 +66,17 @@ jobs:
         run: |
           npm ci
 
-      - name: Bundle Lambda handlers with esbuild
+      - name: Bundle Lambda entry (api/index.ts) with esbuild
         run: |
           mkdir -p .lambda_build
-          # Bundle TypeScript handlers in api/ (adjust patterns if you have multiple named functions)
-          npx esbuild api/*.ts --bundle --platform=node --target=node20 --outdir=.lambda_build --log-level=warning || true
+          # Bundle single router entry so all routes are included
+          npx esbuild api/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=.lambda_build/index.js --log-level=warning
+
+      - name: Copy static project JSON into lambda build
+        run: |
+          # Ensure public projects folder is copied so fs.readFileSync works at runtime
+          mkdir -p .lambda_build/public/projects
+          cp -R public/projects/. .lambda_build/public/projects/ || true
 
       - name: Prepare zip for Lambda
         run: |

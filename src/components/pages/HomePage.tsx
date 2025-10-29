@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import ProfileLayout from '../ProfileLayout';
+import Quiz from '../Quiz';
 
 interface Profile {
   name: string;
@@ -38,6 +39,11 @@ const HomePage: React.FC = () => {
             </li>
           </ul>
         </section>
+
+        {/* Embed the quiz layout on the homepage */}
+        <div className="mt-10">
+          <Quiz />
+        </div>
       </ProfileLayout>
     </main>
   );
