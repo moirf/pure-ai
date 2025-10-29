@@ -95,17 +95,46 @@ const Quiz: React.FC = () => {
   const [answers, setAnswers] = useState<number[]>([]); // -1 = unanswered, 1 = correct, 0 = wrong
   const [current, setCurrent] = useState(0);
   const [score, setScore] = useState(0);
+  const [loadingSet, setLoadingSet] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const activeStep = steps.find((s) => s.id === active) || steps[0];
 
-  const startSet = () => {
+  const startSet = async () => {
     const setKey = activeStep.key;
-    const setQs = QUESTION_SETS[setKey] || [];
-    setQuestions(setQs);
-    setAnswers(new Array(setQs.length).fill(-1));
-    setCurrent(0);
-    setScore(0);
-    setStarted(true);
+    setLoadingSet(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/questions?set=${encodeURIComponent(setKey)}`);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const data = await res.json();
+      // normalize to Question[]
+      const parsed: Question[] = (Array.isArray(data) ? data : []).map((q: any) => ({
+        text: q.text || q.question || 'Untitled',
+        choices: Array.isArray(q.choices) ? q.choices : q.options || [],
+        answer: typeof q.answer === 'number' ? q.answer : 0,
+      }));
+
+      if (parsed.length === 0) throw new Error('No questions returned');
+
+      setQuestions(parsed);
+      setAnswers(new Array(parsed.length).fill(-1));
+      setCurrent(0);
+      setScore(0);
+      setStarted(true);
+    } catch (err: any) {
+      // fallback to local sets
+      console.warn('Failed to load questions from API, falling back to local set:', err?.message || err);
+      const setQs = QUESTION_SETS[setKey] || [];
+      setQuestions(setQs);
+      setAnswers(new Array(setQs.length).fill(-1));
+      setCurrent(0);
+      setScore(0);
+      setStarted(true);
+      setError(err?.message ? String(err.message) : 'Failed to load questions');
+    } finally {
+      setLoadingSet(false);
+    }
   };
 
   const handleChoice = (idx: number) => {
@@ -140,7 +169,7 @@ const Quiz: React.FC = () => {
 
   return (
     <div className="w-full">
-      <h3 className="text-sm font-extrabold text-center mb-8">Quiz yourself to get ahead ...</h3>
+      <h3 className="text-xl font-bold text-center mb-8">Quiz yourself to get ahead ...</h3>
 
       <div className="grid grid-cols-1 md:[grid-template-columns:220px_1fr_300px] gap-6">
         {/* Left column - steps list */}
@@ -194,12 +223,14 @@ const Quiz: React.FC = () => {
             <div className="mt-6">
               {!started ? (
                 <div className="flex gap-2">
-                  <button onClick={startSet} className="px-4 py-2 bg-blue-600 text-white rounded">Start Set</button>
+                  <button onClick={startSet} disabled={loadingSet} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{loadingSet ? 'Loading…' : 'Start Set'}</button>
                   <button onClick={() => alert('Preview learning content')} className="px-3 py-2 border rounded">Preview</button>
                 </div>
               ) : (
                 <div className="text-sm text-gray-700">In progress — question {current + 1} / {questions.length}</div>
               )}
+
+              {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
             </div>
           </InfoCard>
         </div>

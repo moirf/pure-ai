@@ -1,4 +1,4 @@
 {
-  "apiGatewayEndpoint": "https://your-api-endpoint.com/questions",
+  "apiGatewayEndpoint": "https://wrxa7sq9l7.execute-api.us-east-1.amazonaws.com",
   "lambdaFunctionName": "quiz-api-handler"
 }

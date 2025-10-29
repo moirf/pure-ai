@@ -1,6 +1,5 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import HomePage from './components/pages/HomePage';
 import Quiz from './components/Quiz';
 import GalleriesPage from './components/pages/GalleriesPage';
 import ProfilePage from './components/pages/ProfilePage';
@@ -16,7 +15,7 @@ const App: React.FC = () => {
       <main className="py-6">
         <div className="max-w-6xl mx-auto px-4">
           <Routes>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<Quiz />} />
             <Route path="/quiz" element={<Quiz />} />
             <Route path="/galleries" element={<GalleriesPage />} />
             <Route path="/profile" element={<ProfilePage />} />
