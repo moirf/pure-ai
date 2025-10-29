@@ -27,5 +27,5 @@ export const getQuestion = async (event: APIGatewayEvent): Promise<APIGatewayPro
 };
 
 // Register route
-register('GET', '/questions', listQuestions);
-register('GET', '/questions/:id', getQuestion);
+register('GET', '/api/questions', listQuestions);
+register('GET', '/api/questions/:id', getQuestion);

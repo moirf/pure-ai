@@ -36,5 +36,5 @@ export const getProject = async (event: APIGatewayEvent): Promise<APIGatewayProx
 };
 
 // Register routes
-register('GET', '/projects', listProjects);
-register('GET', '/projects/:id', getProject);
+register('GET', '/api/projects', listProjects);
+register('GET', '/api/projects/:id', getProject);
