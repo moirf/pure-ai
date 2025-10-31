@@ -12,21 +12,1106 @@ interface Question {
 
 // Expanded sample question bank
 const questions: Question[] = [
-  { id: 1, text: 'What is the capital of France?', options: ['Paris', 'London', 'Berlin'], answerIndex: 0 },
-  { id: 2, text: 'What is 2 + 2?', options: ['3', '4', '5'], answerIndex: 1 },
-  { id: 3, text: 'Which language runs in a web browser?', options: ['Java', 'C', 'JavaScript'], answerIndex: 2 },
-  { id: 4, text: 'What does CSS stand for?', options: ['Cascading Style Sheets', 'Computer Style Sheets', 'Creative Style System'], answerIndex: 0 },
-  { id: 5, text: 'Which company developed the React library?', options: ['Google', 'Facebook', 'Microsoft'], answerIndex: 1 },
-  { id: 6, text: 'Which of these is a NoSQL database?', options: ['MySQL', 'MongoDB', 'Postgres'], answerIndex: 1 },
-  { id: 7, text: 'What does HTTP stand for?', options: ['HyperText Transfer Protocol', 'Hyperlink Transfer Protocol', 'HyperText Transmission Program'], answerIndex: 0 },
-  { id: 8, text: 'Which keyword declares a constant in JavaScript?', options: ['var', 'let', 'const'], answerIndex: 2 },
-  { id: 9, text: 'Which HTML element is used for the largest heading?', options: ['<h1>', '<head>', '<heading>'], answerIndex: 0 },
-  { id: 10, text: 'Which built-in method removes the last element from an array in JavaScript?', options: ['pop()', 'push()', 'shift()'], answerIndex: 0 },
-  { id: 11, text: 'Which operator is used for strict equality in JavaScript?', options: ['==', '=', '==='], answerIndex: 2 },
-  { id: 12, text: 'What is the output type of JSON.parse?', options: ['string', 'object', 'number'], answerIndex: 1 },
-  { id: 13, text: 'Which CSS property controls layout flow?', options: ['display', 'color', 'font-size'], answerIndex: 0 },
-  { id: 14, text: 'Which tag is used to include a JavaScript file?', options: ['<script>', '<js>', '<include>'], answerIndex: 0 },
-  { id: 15, text: 'Which HTTP status code means "Not Found"?', options: ['200', '301', '404'], answerIndex: 2 },
+  {
+    "id": 1,
+    "topic": "Child Development & Pedagogy",
+    "text": "Which of the following best describes Piaget's theory?",
+    "options": [
+      "Moral development",
+      "Cognitive development",
+      "Language acquisition"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 2,
+    "topic": "Language I (English)",
+    "text": "Listening skill is best developed through:",
+    "options": [
+      "Dictation",
+      "Storytelling",
+      "Grammar drills"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 3,
+    "topic": "Language II (Hindi)",
+    "text": "‘पर्यायवाची’ का अर्थ है:",
+    "options": [
+      "विपरीतार्थक शब्द",
+      "एक जैसे अर्थ वाले शब्द",
+      "भिन्न भाषा के शब्द"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 4,
+    "topic": "Mathematics",
+    "text": "Which of these is a prime number?",
+    "options": [
+      "9",
+      "11",
+      "15"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 5,
+    "topic": "Environmental Studies",
+    "text": "Plants prepare their food by:",
+    "options": [
+      "Photosynthesis",
+      "Respiration",
+      "Evaporation"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 6,
+    "topic": "Child Development & Pedagogy",
+    "text": "Child-centered education focuses on:",
+    "options": [
+      "Teacher authority",
+      "Learner participation",
+      "Strict discipline"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 7,
+    "topic": "Language I (English)",
+    "text": "The primary goal of language teaching is:",
+    "options": [
+      "Memorizing grammar",
+      "Communication competence",
+      "Learning definitions"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 8,
+    "topic": "Language II (Hindi)",
+    "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
+    "options": [
+      "पढ़ना और याद करना",
+      "अभ्यास और संवाद",
+      "केवल सुनना"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 9,
+    "topic": "Mathematics",
+    "text": "Area of a square with side 6 cm is:",
+    "options": [
+      "36 sq.cm",
+      "12 sq.cm",
+      "18 sq.cm"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 10,
+    "topic": "Environmental Studies",
+    "text": "Which of the following is a renewable resource?",
+    "options": [
+      "Coal",
+      "Wind",
+      "Petroleum"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 11,
+    "topic": "Child Development & Pedagogy",
+    "text": "Vygotsky emphasized the importance of:",
+    "options": [
+      "Individual learning",
+      "Social interaction",
+      "Genetic factors"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 12,
+    "topic": "Language I (English)",
+    "text": "‘Phonemic awareness’ refers to:",
+    "options": [
+      "Understanding sounds of language",
+      "Writing sentences",
+      "Reading paragraphs"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 13,
+    "topic": "Language II (Hindi)",
+    "text": "‘शब्द’ का अर्थ है:",
+    "options": [
+      "ध्वनियों का समूह जो अर्थपूर्ण हो",
+      "वाक्य का अंश",
+      "अक्षरों की गिनती"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 14,
+    "topic": "Mathematics",
+    "text": "The value of 3/4 + 2/4 is:",
+    "options": [
+      "1",
+      "5/4",
+      "3/2"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 15,
+    "topic": "Environmental Studies",
+    "text": "Water changes into vapor during:",
+    "options": [
+      "Condensation",
+      "Evaporation",
+      "Freezing"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 16,
+    "topic": "Child Development & Pedagogy",
+    "text": "Which of the following best describes Piaget's theory?",
+    "options": [
+      "Moral development",
+      "Cognitive development",
+      "Language acquisition"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 17,
+    "topic": "Language I (English)",
+    "text": "Listening skill is best developed through:",
+    "options": [
+      "Dictation",
+      "Storytelling",
+      "Grammar drills"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 18,
+    "topic": "Language II (Hindi)",
+    "text": "‘पर्यायवाची’ का अर्थ है:",
+    "options": [
+      "विपरीतार्थक शब्द",
+      "एक जैसे अर्थ वाले शब्द",
+      "भिन्न भाषा के शब्द"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 19,
+    "topic": "Mathematics",
+    "text": "Which of these is a prime number?",
+    "options": [
+      "9",
+      "11",
+      "15"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 20,
+    "topic": "Environmental Studies",
+    "text": "Plants prepare their food by:",
+    "options": [
+      "Photosynthesis",
+      "Respiration",
+      "Evaporation"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 21,
+    "topic": "Child Development & Pedagogy",
+    "text": "Child-centered education focuses on:",
+    "options": [
+      "Teacher authority",
+      "Learner participation",
+      "Strict discipline"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 22,
+    "topic": "Language I (English)",
+    "text": "The primary goal of language teaching is:",
+    "options": [
+      "Memorizing grammar",
+      "Communication competence",
+      "Learning definitions"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 23,
+    "topic": "Language II (Hindi)",
+    "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
+    "options": [
+      "पढ़ना और याद करना",
+      "अभ्यास और संवाद",
+      "केवल सुनना"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 24,
+    "topic": "Mathematics",
+    "text": "Area of a square with side 6 cm is:",
+    "options": [
+      "36 sq.cm",
+      "12 sq.cm",
+      "18 sq.cm"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 25,
+    "topic": "Environmental Studies",
+    "text": "Which of the following is a renewable resource?",
+    "options": [
+      "Coal",
+      "Wind",
+      "Petroleum"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 26,
+    "topic": "Child Development & Pedagogy",
+    "text": "Vygotsky emphasized the importance of:",
+    "options": [
+      "Individual learning",
+      "Social interaction",
+      "Genetic factors"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 27,
+    "topic": "Language I (English)",
+    "text": "‘Phonemic awareness’ refers to:",
+    "options": [
+      "Understanding sounds of language",
+      "Writing sentences",
+      "Reading paragraphs"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 28,
+    "topic": "Language II (Hindi)",
+    "text": "‘शब्द’ का अर्थ है:",
+    "options": [
+      "ध्वनियों का समूह जो अर्थपूर्ण हो",
+      "वाक्य का अंश",
+      "अक्षरों की गिनती"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 29,
+    "topic": "Mathematics",
+    "text": "The value of 3/4 + 2/4 is:",
+    "options": [
+      "1",
+      "5/4",
+      "3/2"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 30,
+    "topic": "Environmental Studies",
+    "text": "Water changes into vapor during:",
+    "options": [
+      "Condensation",
+      "Evaporation",
+      "Freezing"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 31,
+    "topic": "Child Development & Pedagogy",
+    "text": "Which of the following best describes Piaget's theory?",
+    "options": [
+      "Moral development",
+      "Cognitive development",
+      "Language acquisition"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 32,
+    "topic": "Language I (English)",
+    "text": "Listening skill is best developed through:",
+    "options": [
+      "Dictation",
+      "Storytelling",
+      "Grammar drills"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 33,
+    "topic": "Language II (Hindi)",
+    "text": "‘पर्यायवाची’ का अर्थ है:",
+    "options": [
+      "विपरीतार्थक शब्द",
+      "एक जैसे अर्थ वाले शब्द",
+      "भिन्न भाषा के शब्द"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 34,
+    "topic": "Mathematics",
+    "text": "Which of these is a prime number?",
+    "options": [
+      "9",
+      "11",
+      "15"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 35,
+    "topic": "Environmental Studies",
+    "text": "Plants prepare their food by:",
+    "options": [
+      "Photosynthesis",
+      "Respiration",
+      "Evaporation"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 36,
+    "topic": "Child Development & Pedagogy",
+    "text": "Child-centered education focuses on:",
+    "options": [
+      "Teacher authority",
+      "Learner participation",
+      "Strict discipline"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 37,
+    "topic": "Language I (English)",
+    "text": "The primary goal of language teaching is:",
+    "options": [
+      "Memorizing grammar",
+      "Communication competence",
+      "Learning definitions"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 38,
+    "topic": "Language II (Hindi)",
+    "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
+    "options": [
+      "पढ़ना और याद करना",
+      "अभ्यास और संवाद",
+      "केवल सुनना"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 39,
+    "topic": "Mathematics",
+    "text": "Area of a square with side 6 cm is:",
+    "options": [
+      "36 sq.cm",
+      "12 sq.cm",
+      "18 sq.cm"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 40,
+    "topic": "Environmental Studies",
+    "text": "Which of the following is a renewable resource?",
+    "options": [
+      "Coal",
+      "Wind",
+      "Petroleum"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 41,
+    "topic": "Child Development & Pedagogy",
+    "text": "Vygotsky emphasized the importance of:",
+    "options": [
+      "Individual learning",
+      "Social interaction",
+      "Genetic factors"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 42,
+    "topic": "Language I (English)",
+    "text": "‘Phonemic awareness’ refers to:",
+    "options": [
+      "Understanding sounds of language",
+      "Writing sentences",
+      "Reading paragraphs"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 43,
+    "topic": "Language II (Hindi)",
+    "text": "‘शब्द’ का अर्थ है:",
+    "options": [
+      "ध्वनियों का समूह जो अर्थपूर्ण हो",
+      "वाक्य का अंश",
+      "अक्षरों की गिनती"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 44,
+    "topic": "Mathematics",
+    "text": "The value of 3/4 + 2/4 is:",
+    "options": [
+      "1",
+      "5/4",
+      "3/2"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 45,
+    "topic": "Environmental Studies",
+    "text": "Water changes into vapor during:",
+    "options": [
+      "Condensation",
+      "Evaporation",
+      "Freezing"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 46,
+    "topic": "Child Development & Pedagogy",
+    "text": "Which of the following best describes Piaget's theory?",
+    "options": [
+      "Moral development",
+      "Cognitive development",
+      "Language acquisition"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 47,
+    "topic": "Language I (English)",
+    "text": "Listening skill is best developed through:",
+    "options": [
+      "Dictation",
+      "Storytelling",
+      "Grammar drills"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 48,
+    "topic": "Language II (Hindi)",
+    "text": "‘पर्यायवाची’ का अर्थ है:",
+    "options": [
+      "विपरीतार्थक शब्द",
+      "एक जैसे अर्थ वाले शब्द",
+      "भिन्न भाषा के शब्द"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 49,
+    "topic": "Mathematics",
+    "text": "Which of these is a prime number?",
+    "options": [
+      "9",
+      "11",
+      "15"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 50,
+    "topic": "Environmental Studies",
+    "text": "Plants prepare their food by:",
+    "options": [
+      "Photosynthesis",
+      "Respiration",
+      "Evaporation"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 51,
+    "topic": "Child Development & Pedagogy",
+    "text": "Child-centered education focuses on:",
+    "options": [
+      "Teacher authority",
+      "Learner participation",
+      "Strict discipline"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 52,
+    "topic": "Language I (English)",
+    "text": "The primary goal of language teaching is:",
+    "options": [
+      "Memorizing grammar",
+      "Communication competence",
+      "Learning definitions"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 53,
+    "topic": "Language II (Hindi)",
+    "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
+    "options": [
+      "पढ़ना और याद करना",
+      "अभ्यास और संवाद",
+      "केवल सुनना"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 54,
+    "topic": "Mathematics",
+    "text": "Area of a square with side 6 cm is:",
+    "options": [
+      "36 sq.cm",
+      "12 sq.cm",
+      "18 sq.cm"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 55,
+    "topic": "Environmental Studies",
+    "text": "Which of the following is a renewable resource?",
+    "options": [
+      "Coal",
+      "Wind",
+      "Petroleum"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 56,
+    "topic": "Child Development & Pedagogy",
+    "text": "Vygotsky emphasized the importance of:",
+    "options": [
+      "Individual learning",
+      "Social interaction",
+      "Genetic factors"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 57,
+    "topic": "Language I (English)",
+    "text": "‘Phonemic awareness’ refers to:",
+    "options": [
+      "Understanding sounds of language",
+      "Writing sentences",
+      "Reading paragraphs"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 58,
+    "topic": "Language II (Hindi)",
+    "text": "‘शब्द’ का अर्थ है:",
+    "options": [
+      "ध्वनियों का समूह जो अर्थपूर्ण हो",
+      "वाक्य का अंश",
+      "अक्षरों की गिनती"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 59,
+    "topic": "Mathematics",
+    "text": "The value of 3/4 + 2/4 is:",
+    "options": [
+      "1",
+      "5/4",
+      "3/2"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 60,
+    "topic": "Environmental Studies",
+    "text": "Water changes into vapor during:",
+    "options": [
+      "Condensation",
+      "Evaporation",
+      "Freezing"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 61,
+    "topic": "Child Development & Pedagogy",
+    "text": "Which of the following best describes Piaget's theory?",
+    "options": [
+      "Moral development",
+      "Cognitive development",
+      "Language acquisition"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 62,
+    "topic": "Language I (English)",
+    "text": "Listening skill is best developed through:",
+    "options": [
+      "Dictation",
+      "Storytelling",
+      "Grammar drills"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 63,
+    "topic": "Language II (Hindi)",
+    "text": "‘पर्यायवाची’ का अर्थ है:",
+    "options": [
+      "विपरीतार्थक शब्द",
+      "एक जैसे अर्थ वाले शब्द",
+      "भिन्न भाषा के शब्द"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 64,
+    "topic": "Mathematics",
+    "text": "Which of these is a prime number?",
+    "options": [
+      "9",
+      "11",
+      "15"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 65,
+    "topic": "Environmental Studies",
+    "text": "Plants prepare their food by:",
+    "options": [
+      "Photosynthesis",
+      "Respiration",
+      "Evaporation"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 66,
+    "topic": "Child Development & Pedagogy",
+    "text": "Child-centered education focuses on:",
+    "options": [
+      "Teacher authority",
+      "Learner participation",
+      "Strict discipline"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 67,
+    "topic": "Language I (English)",
+    "text": "The primary goal of language teaching is:",
+    "options": [
+      "Memorizing grammar",
+      "Communication competence",
+      "Learning definitions"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 68,
+    "topic": "Language II (Hindi)",
+    "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
+    "options": [
+      "पढ़ना और याद करना",
+      "अभ्यास और संवाद",
+      "केवल सुनना"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 69,
+    "topic": "Mathematics",
+    "text": "Area of a square with side 6 cm is:",
+    "options": [
+      "36 sq.cm",
+      "12 sq.cm",
+      "18 sq.cm"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 70,
+    "topic": "Environmental Studies",
+    "text": "Which of the following is a renewable resource?",
+    "options": [
+      "Coal",
+      "Wind",
+      "Petroleum"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 71,
+    "topic": "Child Development & Pedagogy",
+    "text": "Vygotsky emphasized the importance of:",
+    "options": [
+      "Individual learning",
+      "Social interaction",
+      "Genetic factors"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 72,
+    "topic": "Language I (English)",
+    "text": "‘Phonemic awareness’ refers to:",
+    "options": [
+      "Understanding sounds of language",
+      "Writing sentences",
+      "Reading paragraphs"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 73,
+    "topic": "Language II (Hindi)",
+    "text": "‘शब्द’ का अर्थ है:",
+    "options": [
+      "ध्वनियों का समूह जो अर्थपूर्ण हो",
+      "वाक्य का अंश",
+      "अक्षरों की गिनती"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 74,
+    "topic": "Mathematics",
+    "text": "The value of 3/4 + 2/4 is:",
+    "options": [
+      "1",
+      "5/4",
+      "3/2"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 75,
+    "topic": "Environmental Studies",
+    "text": "Water changes into vapor during:",
+    "options": [
+      "Condensation",
+      "Evaporation",
+      "Freezing"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 76,
+    "topic": "Child Development & Pedagogy",
+    "text": "Which of the following best describes Piaget's theory?",
+    "options": [
+      "Moral development",
+      "Cognitive development",
+      "Language acquisition"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 77,
+    "topic": "Language I (English)",
+    "text": "Listening skill is best developed through:",
+    "options": [
+      "Dictation",
+      "Storytelling",
+      "Grammar drills"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 78,
+    "topic": "Language II (Hindi)",
+    "text": "‘पर्यायवाची’ का अर्थ है:",
+    "options": [
+      "विपरीतार्थक शब्द",
+      "एक जैसे अर्थ वाले शब्द",
+      "भिन्न भाषा के शब्द"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 79,
+    "topic": "Mathematics",
+    "text": "Which of these is a prime number?",
+    "options": [
+      "9",
+      "11",
+      "15"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 80,
+    "topic": "Environmental Studies",
+    "text": "Plants prepare their food by:",
+    "options": [
+      "Photosynthesis",
+      "Respiration",
+      "Evaporation"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 81,
+    "topic": "Child Development & Pedagogy",
+    "text": "Child-centered education focuses on:",
+    "options": [
+      "Teacher authority",
+      "Learner participation",
+      "Strict discipline"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 82,
+    "topic": "Language I (English)",
+    "text": "The primary goal of language teaching is:",
+    "options": [
+      "Memorizing grammar",
+      "Communication competence",
+      "Learning definitions"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 83,
+    "topic": "Language II (Hindi)",
+    "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
+    "options": [
+      "पढ़ना और याद करना",
+      "अभ्यास और संवाद",
+      "केवल सुनना"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 84,
+    "topic": "Mathematics",
+    "text": "Area of a square with side 6 cm is:",
+    "options": [
+      "36 sq.cm",
+      "12 sq.cm",
+      "18 sq.cm"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 85,
+    "topic": "Environmental Studies",
+    "text": "Which of the following is a renewable resource?",
+    "options": [
+      "Coal",
+      "Wind",
+      "Petroleum"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 86,
+    "topic": "Child Development & Pedagogy",
+    "text": "Vygotsky emphasized the importance of:",
+    "options": [
+      "Individual learning",
+      "Social interaction",
+      "Genetic factors"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 87,
+    "topic": "Language I (English)",
+    "text": "‘Phonemic awareness’ refers to:",
+    "options": [
+      "Understanding sounds of language",
+      "Writing sentences",
+      "Reading paragraphs"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 88,
+    "topic": "Language II (Hindi)",
+    "text": "‘शब्द’ का अर्थ है:",
+    "options": [
+      "ध्वनियों का समूह जो अर्थपूर्ण हो",
+      "वाक्य का अंश",
+      "अक्षरों की गिनती"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 89,
+    "topic": "Mathematics",
+    "text": "The value of 3/4 + 2/4 is:",
+    "options": [
+      "1",
+      "5/4",
+      "3/2"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 90,
+    "topic": "Environmental Studies",
+    "text": "Water changes into vapor during:",
+    "options": [
+      "Condensation",
+      "Evaporation",
+      "Freezing"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 91,
+    "topic": "Child Development & Pedagogy",
+    "text": "Which of the following best describes Piaget's theory?",
+    "options": [
+      "Moral development",
+      "Cognitive development",
+      "Language acquisition"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 92,
+    "topic": "Language I (English)",
+    "text": "Listening skill is best developed through:",
+    "options": [
+      "Dictation",
+      "Storytelling",
+      "Grammar drills"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 93,
+    "topic": "Language II (Hindi)",
+    "text": "‘पर्यायवाची’ का अर्थ है:",
+    "options": [
+      "विपरीतार्थक शब्द",
+      "एक जैसे अर्थ वाले शब्द",
+      "भिन्न भाषा के शब्द"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 94,
+    "topic": "Mathematics",
+    "text": "Which of these is a prime number?",
+    "options": [
+      "9",
+      "11",
+      "15"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 95,
+    "topic": "Environmental Studies",
+    "text": "Plants prepare their food by:",
+    "options": [
+      "Photosynthesis",
+      "Respiration",
+      "Evaporation"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 96,
+    "topic": "Child Development & Pedagogy",
+    "text": "Child-centered education focuses on:",
+    "options": [
+      "Teacher authority",
+      "Learner participation",
+      "Strict discipline"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 97,
+    "topic": "Language I (English)",
+    "text": "The primary goal of language teaching is:",
+    "options": [
+      "Memorizing grammar",
+      "Communication competence",
+      "Learning definitions"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 98,
+    "topic": "Language II (Hindi)",
+    "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
+    "options": [
+      "पढ़ना और याद करना",
+      "अभ्यास और संवाद",
+      "केवल सुनना"
+    ],
+    "answerIndex": 1
+  },
+  {
+    "id": 99,
+    "topic": "Mathematics",
+    "text": "Area of a square with side 6 cm is:",
+    "options": [
+      "36 sq.cm",
+      "12 sq.cm",
+      "18 sq.cm"
+    ],
+    "answerIndex": 0
+  },
+  {
+    "id": 100,
+    "topic": "Environmental Studies",
+    "text": "Which of the following is a renewable resource?",
+    "options": [
+      "Coal",
+      "Wind",
+      "Petroleum"
+    ],
+    "answerIndex": 1
+  }
 ];
 
 function stripAnswer(q: Question) {

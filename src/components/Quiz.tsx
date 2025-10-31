@@ -219,8 +219,12 @@ const Quiz: React.FC = () => {
 
   const handleSelect = (idx: number) => {
     if (!currentQuestion) return;
-    if (selected !== null) return; // already selected
-    setSelected(idx);
+    // Allow changing selection until the user submits. Toggle if same index clicked again.
+    if (selected === idx) {
+      setSelected(null);
+    } else {
+      setSelected(idx);
+    }
   };
 
   const handleSubmitAnswer = async () => {
@@ -346,7 +350,6 @@ const Quiz: React.FC = () => {
                   <button
                     key={i}
                     onClick={() => handleSelect(i)}
-                    disabled={selected !== null}
                     className={`text-left px-4 py-3 border rounded hover:bg-gray-100 ${selected === i ? 'bg-indigo-50 border-indigo-400' : ''}`}
                   >
                     {c}
