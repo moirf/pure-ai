@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 type Question = {
   text: string;
@@ -60,19 +60,23 @@ const Avatar: React.FC<{ initials: string; color?: string }> = ({ initials, colo
   </div>
 );
 
-const StepItem: React.FC<{ step: typeof steps[number]; active?: boolean; onClick?: () => void }> = ({ step, active, onClick }) => (
-  <li
-    onClick={onClick}
-    className={`flex items-center gap-3 px-4 py-4 cursor-pointer ${active ? 'bg-blue-50 border-l-4 border-blue-400' : ''}`}
-  >
-    <div className="text-2xl" aria-hidden>
-      {step.icon}
-    </div>
-    <div className="flex-1">
-      <div className={`text-sm ${active ? 'text-blue-600' : 'text-gray-800'}`}>{step.title}</div>
-    </div>
-  </li>
+const StepItem = React.forwardRef<HTMLLIElement, { step: typeof steps[number]; active?: boolean; onClick?: () => void }>(
+  ({ step, active, onClick }, ref) => (
+    <li
+      ref={ref}
+      onClick={onClick}
+      className={`flex items-center gap-3 px-4 py-4 cursor-pointer ${active ? 'bg-blue-50 border-l-4 border-blue-400' : ''}`}
+    >
+      <div className="text-2xl" aria-hidden>
+        {step.icon}
+      </div>
+      <div className="flex-1">
+        <div className={`text-sm ${active ? 'text-blue-600' : 'text-gray-800'}`}>{step.title}</div>
+      </div>
+    </li>
+  )
 );
+StepItem.displayName = 'StepItem';
 
 const InfoCard: React.FC<{ tone?: 'green' | 'purple'; title: string; children: React.ReactNode }> = ({ tone = 'green', title, children }) => {
   const base = 'p-6 rounded-xl shadow-sm';
@@ -91,193 +95,241 @@ const InfoCard: React.FC<{ tone?: 'green' | 'purple'; title: string; children: R
 const Quiz: React.FC = () => {
   const [active, setActive] = useState<number>(4);
   const [started, setStarted] = useState(false);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  // We'll fetch one question at a time from the API.
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [answers, setAnswers] = useState<number[]>([]); // -1 = unanswered, 1 = correct, 0 = wrong
-  const [current, setCurrent] = useState(0);
+  const [current, setCurrent] = useState(0); // index in the sequence 0..(total-1)
   const [score, setScore] = useState(0);
+  const totalQuestions = 15;
+  const [selected, setSelected] = useState<number | null>(null);
+  const [loadingQuestion, setLoadingQuestion] = useState(false);
   const [loadingSet, setLoadingSet] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const activeStep = steps.find((s) => s.id === active) || steps[0];
+  // refs for alignment
+  const leftListRef = useRef<HTMLUListElement | null>(null);
+  const stepRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const centerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // Keep the center column pinned to the top-start. Clear any marginTop set previously.
+    function resetCenter() {
+      if (centerRef.current) centerRef.current.style.marginTop = '';
+    }
+
+    resetCenter();
+    window.addEventListener('resize', resetCenter);
+    return () => window.removeEventListener('resize', resetCenter);
+  }, [active]);
 
   const startSet = async () => {
     const setKey = activeStep.key;
     setLoadingSet(true);
     setError(null);
     try {
-      const res = await fetch(`/api/questions?set=${encodeURIComponent(setKey)}`);
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const data = await res.json();
-      // normalize to Question[]
-      const parsed: Question[] = (Array.isArray(data) ? data : []).map((q: any) => ({
-        text: q.text || q.question || 'Untitled',
-        choices: Array.isArray(q.choices) ? q.choices : q.options || [],
-        answer: typeof q.answer === 'number' ? q.answer : 0,
-      }));
-
-      if (parsed.length === 0) throw new Error('No questions returned');
-
-      setQuestions(parsed);
-      setAnswers(new Array(parsed.length).fill(-1));
+      // initialize answers for the whole session
+      setAnswers(new Array(totalQuestions).fill(-1));
       setCurrent(0);
       setScore(0);
+      setSelected(null);
       setStarted(true);
+      // fetch the first question
+      await fetchQuestion(0, setKey);
     } catch (err: any) {
-      // fallback to local sets
-      console.warn('Failed to load questions from API, falling back to local set:', err?.message || err);
-      const setQs = QUESTION_SETS[setKey] || [];
-      setQuestions(setQs);
-      setAnswers(new Array(setQs.length).fill(-1));
-      setCurrent(0);
-      setScore(0);
-      setStarted(true);
-      setError(err?.message ? String(err.message) : 'Failed to load questions');
+      console.error('startSet error', err);
+      setError(String(err?.message ?? err));
+      setStarted(false);
     } finally {
       setLoadingSet(false);
     }
   };
 
-  const handleChoice = (idx: number) => {
-    if (!questions.length) return;
-    // ignore if already answered
-    if (answers[current] !== -1) return;
+  async function fetchQuestion(index: number, setKey?: string) {
+    setLoadingQuestion(true);
+    setError(null);
+    try {
+      const key = setKey ?? activeStep.key;
+      const res = await fetch(`/api/questions?set=${encodeURIComponent(key)}&index=${index}`);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const data = await res.json();
+      // API may return an array or a single object.
+      let q: any = null;
+      if (Array.isArray(data)) {
+        // prefer the provided index if available, else take first
+        q = data[index] ?? data[0];
+      } else {
+        q = data;
+      }
+      if (!q) throw new Error('No question returned');
+      const parsed: Question = {
+        text: q.text || q.question || 'Untitled',
+        choices: Array.isArray(q.choices) ? q.choices : q.options || [],
+        answer: typeof q.answer === 'number' ? q.answer : 0,
+      };
 
-    const correct = questions[current].answer === idx;
+      setCurrentQuestion(parsed);
+      setSelected(null);
+    } catch (err: any) {
+      // fallback: pick a random question from local set
+      console.warn('Failed to fetch question, falling back to local sample:', err?.message || err);
+      const local = QUESTION_SETS[activeStep.key] || [];
+      const pick = local.length ? local[index % local.length] : { text: 'Fallback question', choices: ['A', 'B', 'C'], answer: 0 };
+      setCurrentQuestion(pick);
+      setError(err?.message ? String(err.message) : 'Failed to fetch question');
+    } finally {
+      setLoadingQuestion(false);
+    }
+  }
+
+  const handleSelect = (idx: number) => {
+    if (!currentQuestion) return;
+    if (selected !== null) return; // already selected
+    setSelected(idx);
+  };
+
+  const handleSubmitAnswer = async () => {
+    if (selected === null || !currentQuestion) return;
+    const correct = currentQuestion.answer === selected;
     setAnswers((prev) => {
       const copy = [...prev];
       copy[current] = correct ? 1 : 0;
       return copy;
     });
-
     if (correct) setScore((s) => s + 1);
 
     const next = current + 1;
-    if (next < questions.length) {
+    if (next < totalQuestions) {
       setCurrent(next);
+      // fetch next question
+      await fetchQuestion(next);
     } else {
+      // finished
       setStarted(false);
+      setCurrentQuestion(null);
     }
   };
 
   const reset = () => {
     setStarted(false);
-    setQuestions([]);
+    setCurrentQuestion(null);
     setAnswers([]);
     setCurrent(0);
     setScore(0);
+    setSelected(null);
   };
 
   return (
-    <div className="w-full">
-      <h3 className="text-xl font-bold text-center mb-8">Quiz yourself to get ahead ...</h3>
-
-      <div className="grid grid-cols-1 md:[grid-template-columns:220px_1fr_300px] gap-6">
+    <div className="w-full px-6 md:px-10">
+      <div className="grid grid-cols-1 md:[grid-template-columns:2fr_8fr_2fr] gap-6">
         {/* Left column - steps list */}
         <div className="bg-white border rounded-xl overflow-hidden">
-          <ul className="divide-y">
-            {steps.map((s) => (
-              <StepItem key={s.id} step={s} active={s.id === active} onClick={() => { setActive(s.id); reset(); }} />
+          <ul className="divide-y" ref={leftListRef}>
+            {steps.map((s, i) => (
+              <StepItem
+                key={s.id}
+                step={s}
+                active={s.id === active}
+                ref={(el) => (stepRefs.current[i] = el)}
+                onClick={() => {
+                  setActive(s.id);
+                  reset();
+                }}
+              />
             ))}
           </ul>
         </div>
 
         {/* Center card (details for the active set) */}
-        <div>
+        <div ref={centerRef}>
           <InfoCard tone="green" title={activeStep.title}>
             {/* Segmented progress bar (green=correct, red=wrong, gray=unanswered) */}
             <div className="mb-4">
               <div className="w-full h-3 bg-gray-100 rounded overflow-hidden flex">
-                {questions.length === 0 && (
-                  <div className="w-full h-3 bg-gray-200" />
-                )}
-                {questions.length > 0 && answers.length === questions.length && (
-                  questions.map((_, i) => {
-                    const state = answers[i];
-                    const width = `${100 / questions.length}%`;
-                    const cls = state === 1 ? 'bg-green-500' : state === 0 ? 'bg-red-500' : 'bg-gray-300';
-                    return <div key={i} className={`${cls} h-3`} style={{ width }} />;
-                  })
-                )}
-                {questions.length > 0 && answers.length !== questions.length && (
-                  // show answered segments and the rest as gray
-                  questions.map((_, i) => {
-                    const state = answers[i] ?? -1;
-                    const width = `${100 / questions.length}%`;
-                    const cls = state === 1 ? 'bg-green-500' : state === 0 ? 'bg-red-500' : 'bg-gray-300';
-                    return <div key={i} className={`${cls} h-3`} style={{ width }} />;
-                  })
-                )}
+                {Array.from({ length: totalQuestions }).map((_, i) => {
+                  const state = answers[i] ?? -1;
+                  const width = `${100 / totalQuestions}%`;
+                  const cls = state === 1 ? 'bg-green-500' : state === 0 ? 'bg-red-500' : 'bg-gray-300';
+                  return <div key={i} className={`${cls} h-3`} style={{ width }} />;
+                })}
               </div>
             </div>
 
             <p className="mb-4">{getDescriptionForKey(activeStep.key)}</p>
 
-            <div className="flex items-center gap-3">
-              <div className="flex -space-x-3">
-                <Avatar initials="MI" color="bg-white border" />
-                <Avatar initials="AB" color="bg-white border" />
-                <Avatar initials="JS" color="bg-white border" />
-              </div>
-            </div>
-
             <div className="mt-6">
               {!started ? (
                 <div className="flex gap-2">
                   <button onClick={startSet} disabled={loadingSet} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{loadingSet ? 'Loading…' : 'Start Set'}</button>
-                  <button onClick={() => alert('Preview learning content')} className="px-3 py-2 border rounded">Preview</button>
                 </div>
               ) : (
-                <div className="text-sm text-gray-700">In progress — question {current + 1} / {questions.length}</div>
+                <div className="text-sm text-gray-700">In progress — question {current + 1} / {totalQuestions}</div>
               )}
 
               {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
             </div>
           </InfoCard>
-        </div>
+          {/* Inline quiz UI — appears when started */}
+          {started && currentQuestion && (
+            <div className="mt-6 bg-white p-6 rounded shadow w-full">
+              <div className="text-lg font-semibold mb-4">{currentQuestion.text}</div>
 
-        {/* Right card (progress / learn) */}
-        <div>
-          <InfoCard tone="purple" title="Progress & Learn">
-            <p className="mb-4">Track your progress and get suggested courses tailored to this set.</p>
+              <div className="grid gap-3">
+                {currentQuestion.choices.map((c, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSelect(i)}
+                    disabled={selected !== null}
+                    className={`text-left px-4 py-3 border rounded hover:bg-gray-100 ${selected === i ? 'bg-indigo-50 border-indigo-400' : ''}`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
 
-            <div className="mt-4 flex items-center gap-4">
-              <div className="w-20 h-20 rounded-lg bg-white flex items-center justify-center">IMG</div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between bg-white p-3 rounded-lg">
-                  <div className="text-sm text-gray-500">Suggested time</div>
-                  <div className="text-lg font-semibold text-indigo-600">10m</div>
-                </div>
-                <div className="mt-3">
-                  <button className="px-4 py-2 bg-indigo-600 text-white rounded">Learn</button>
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-sm text-gray-600">Score: {score}</div>
+                <div className="flex gap-2">
+                  <button onClick={reset} className="px-3 py-2 border rounded">Stop</button>
+                  <button
+                    onClick={handleSubmitAnswer}
+                    disabled={selected === null || loadingQuestion}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded disabled:opacity-50"
+                  >
+                    {loadingQuestion ? 'Loading…' : (current + 1 >= totalQuestions ? 'Finish' : 'Submit & Next')}
+                  </button>
                 </div>
               </div>
             </div>
-          </InfoCard>
+          )}
+
         </div>
-      </div>
 
-      {/* Inline quiz UI — appears when started */}
-      {started && questions.length > 0 && (
-        <div className="mt-8 max-w-3xl mx-auto bg-white p-6 rounded shadow">
-          <div className="text-sm text-gray-600 mb-2">Set: <strong>{activeStep.title}</strong></div>
-          <div className="text-lg font-semibold mb-4">{questions[current].text}</div>
+        {/* Right column: compact progress summary */}
+        <div>
+          <div className="p-6 rounded-xl bg-white border shadow-sm">
+            <h4 className="text-lg font-semibold mb-3">Progress</h4>
+            <div className="text-sm text-gray-600 mb-2">Question {Math.min(current + 1, totalQuestions)} of {totalQuestions}</div>
+            <div className="text-2xl font-bold text-indigo-600 mb-3">{Math.round((score / Math.max(1, totalQuestions)) * 100)}%</div>
 
-          <div className="grid gap-3">
-            {questions[current].choices.map((c, i) => (
-              <button key={i} onClick={() => handleChoice(i)} className="text-left px-4 py-3 border rounded hover:bg-gray-100">
-                {c}
-              </button>
-            ))}
-          </div>
+            <div className="w-full h-3 bg-gray-100 rounded overflow-hidden flex mb-3">
+              {Array.from({ length: totalQuestions }).map((_, i) => {
+                const state = answers[i] ?? -1;
+                const width = `${100 / totalQuestions}%`;
+                const cls = state === 1 ? 'bg-green-500' : state === 0 ? 'bg-red-500' : 'bg-gray-300';
+                return <div key={i} className={`${cls} h-3`} style={{ width }} />;
+              })}
+            </div>
 
-          <div className="mt-4 flex items-center justify-between">
-            <div className="text-sm text-gray-600">Score: {score}</div>
-            <div className="flex gap-2">
-              <button onClick={reset} className="px-3 py-2 border rounded">Stop</button>
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-500">Score</div>
+              <div className="text-lg font-semibold">{score}</div>
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      
     </div>
   );
 };
