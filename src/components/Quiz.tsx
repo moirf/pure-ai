@@ -3,14 +3,15 @@ import React, { useState, useRef, useEffect } from 'react';
 type Question = {
   text: string;
   choices: string[];
-  answer: number;
+  // `answer` is optional because server does not send the correct answer to the client
+  answer?: number;
 };
 
 const steps = [
-  { id: 1, title: 'Get Noticed', icon: '✉️', key: 'noticed' },
-  { id: 2, title: 'Get Hired', icon: '💼', key: 'hired' },
-  { id: 3, title: 'Get Paid More', icon: '💵', key: 'paid' },
-  { id: 4, title: 'Get promoted', icon: '👑', key: 'promoted' },
+  { id: 1, title: 'TET Practice', icon: '👑', key: 'tet' },
+  { id: 2, title: 'Bank PO', icon: '👑', key: 'po' },
+  { id: 3, title: 'GK', icon: '👑', key: 'gk' },
+  { id: 4, title: 'Math Test', icon: '👑', key: 'math' },
 ];
 
 // Sample question sets for each step — replace or extend with real questions/API later.
@@ -97,6 +98,7 @@ const Quiz: React.FC = () => {
   const [started, setStarted] = useState(false);
   // We'll fetch one question at a time from the API.
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<number[]>([]); // -1 = unanswered, 1 = correct, 0 = wrong
   const [current, setCurrent] = useState(0); // index in the sequence 0..(total-1)
   const [score, setScore] = useState(0);
@@ -105,6 +107,7 @@ const Quiz: React.FC = () => {
   const [loadingQuestion, setLoadingQuestion] = useState(false);
   const [loadingSet, setLoadingSet] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [finished, setFinished] = useState(false);
 
   const activeStep = steps.find((s) => s.id === active) || steps[0];
   // refs for alignment
@@ -134,8 +137,23 @@ const Quiz: React.FC = () => {
       setScore(0);
       setSelected(null);
       setStarted(true);
-      // fetch the first question
-      await fetchQuestion(0, setKey);
+      // Try to start a server session. If it fails, fall back to local fetch.
+      try {
+        const res = await fetch('/api/questions/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ count: totalQuestions })
+        });
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        const data = await res.json();
+        // { sessionId, index, question: { id, text, options } }
+        setSessionId(data.sessionId);
+        const q = data.question;
+        setCurrentQuestion({ text: q.text || q.question || 'Untitled', choices: q.options || q.choices || [], answer: undefined });
+      } catch (err) {
+        // fallback to previous behaviour
+        await fetchQuestion(0, setKey);
+      }
     } catch (err: any) {
       console.error('startSet error', err);
       setError(String(err?.message ?? err));
@@ -150,26 +168,43 @@ const Quiz: React.FC = () => {
     setError(null);
     try {
       const key = setKey ?? activeStep.key;
-      const res = await fetch(`/api/questions?set=${encodeURIComponent(key)}&index=${index}`);
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const data = await res.json();
-      // API may return an array or a single object.
-      let q: any = null;
-      if (Array.isArray(data)) {
-        // prefer the provided index if available, else take first
-        q = data[index] ?? data[0];
+      // If we have a server session, use the session endpoint which returns shuffled options but not the answer.
+      if (sessionId) {
+        const res = await fetch(`/api/questions?session=${encodeURIComponent(sessionId)}&index=${index}`);
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        const data = await res.json();
+        const q = data.question;
+        if (!q) throw new Error('No question returned from session');
+        const parsed: Question = {
+          text: q.text || q.question || 'Untitled',
+          choices: Array.isArray(q.options) ? q.options : q.choices || [],
+          answer: undefined,
+        };
+        setCurrentQuestion(parsed);
+        setSelected(null);
       } else {
-        q = data;
-      }
-      if (!q) throw new Error('No question returned');
-      const parsed: Question = {
-        text: q.text || q.question || 'Untitled',
-        choices: Array.isArray(q.choices) ? q.choices : q.options || [],
-        answer: typeof q.answer === 'number' ? q.answer : 0,
-      };
+        // legacy / non-session fetch
+        const res = await fetch(`/api/questions?set=${encodeURIComponent(key)}&index=${index}`);
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        const data = await res.json();
+        // API may return an array or a single object.
+        let q: any = null;
+        if (Array.isArray(data)) {
+          // prefer the provided index if available, else take first
+          q = data[index] ?? data[0];
+        } else {
+          q = data;
+        }
+        if (!q) throw new Error('No question returned');
+        const parsed: Question = {
+          text: q.text || q.question || 'Untitled',
+          choices: Array.isArray(q.choices) ? q.choices : q.options || [],
+          answer: typeof q.answer === 'number' ? q.answer : undefined,
+        };
 
-      setCurrentQuestion(parsed);
-      setSelected(null);
+        setCurrentQuestion(parsed);
+        setSelected(null);
+      }
     } catch (err: any) {
       // fallback: pick a random question from local set
       console.warn('Failed to fetch question, falling back to local sample:', err?.message || err);
@@ -190,23 +225,54 @@ const Quiz: React.FC = () => {
 
   const handleSubmitAnswer = async () => {
     if (selected === null || !currentQuestion) return;
-    const correct = currentQuestion.answer === selected;
-    setAnswers((prev) => {
-      const copy = [...prev];
-      copy[current] = correct ? 1 : 0;
-      return copy;
-    });
-    if (correct) setScore((s) => s + 1);
+    // If using server session, validate via API (server maps client-shuffled index to original answer)
+    if (sessionId) {
+      try {
+        const res = await fetch('/api/questions/answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, index: current, selectedIndex: selected })
+        });
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        const data = await res.json();
+        const correct = !!data.correct;
+        setAnswers((prev) => {
+          const copy = [...prev];
+          copy[current] = correct ? 1 : 0;
+          return copy;
+        });
+        if (correct) setScore((s) => s + 1);
+      } catch (err: any) {
+        console.warn('Validation failed, falling back to client check', err?.message || err);
+        const correct = currentQuestion.answer === selected;
+        setAnswers((prev) => {
+          const copy = [...prev];
+          copy[current] = correct ? 1 : 0;
+          return copy;
+        });
+        if (correct) setScore((s) => s + 1);
+      }
+    } else {
+      // client-only validation (legacy / fallback)
+      const correct = currentQuestion.answer === selected;
+      setAnswers((prev) => {
+        const copy = [...prev];
+        copy[current] = correct ? 1 : 0;
+        return copy;
+      });
+      if (correct) setScore((s) => s + 1);
+    }
 
     const next = current + 1;
     if (next < totalQuestions) {
       setCurrent(next);
-      // fetch next question
+      // fetch next question (session-aware)
       await fetchQuestion(next);
     } else {
       // finished
       setStarted(false);
       setCurrentQuestion(null);
+      setFinished(true);
     }
   };
 
@@ -217,6 +283,7 @@ const Quiz: React.FC = () => {
     setCurrent(0);
     setScore(0);
     setSelected(null);
+    setFinished(false);
   };
 
   return (
@@ -290,7 +357,6 @@ const Quiz: React.FC = () => {
               <div className="mt-4 flex items-center justify-between">
                 <div className="text-sm text-gray-600">Score: {score}</div>
                 <div className="flex gap-2">
-                  <button onClick={reset} className="px-3 py-2 border rounded">Stop</button>
                   <button
                     onClick={handleSubmitAnswer}
                     disabled={selected === null || loadingQuestion}
@@ -302,6 +368,30 @@ const Quiz: React.FC = () => {
               </div>
             </div>
           )}
+
+              {/* Finished summary view */}
+              {finished && (
+                <div className="mt-6 bg-white p-6 rounded shadow w-full">
+                  <h3 className="text-xl font-semibold mb-2">Test Summary</h3>
+                  <p className="mb-4">You scored <span className="font-bold">{score}</span> of <span className="font-bold">{totalQuestions}</span> ({Math.round((score / Math.max(1, totalQuestions)) * 100)}%)</p>
+
+                  <div className="grid gap-2">
+                    {answers.map((a, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-2 border rounded">
+                        <div className="text-sm">Question {i + 1}</div>
+                        <div className={a === 1 ? 'text-green-600 font-semibold' : a === 0 ? 'text-red-600 font-semibold' : 'text-gray-600'}>
+                          {a === 1 ? 'Correct' : a === 0 ? 'Wrong' : 'Unanswered'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <button onClick={reset} className="px-4 py-2 border rounded">Retry</button>
+                    <button onClick={() => { reset(); startSet(); }} className="px-4 py-2 bg-indigo-600 text-white rounded">Retake</button>
+                  </div>
+                </div>
+              )}
 
         </div>
 
