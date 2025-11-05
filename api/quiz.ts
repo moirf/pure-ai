@@ -1,8 +1,13 @@
 import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { register } from './router';
 
+// Optional DynamoDB support (AWS SDK v3)
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, GetCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
+
 interface Question {
   id: number;
+  Category?: string;
   text: string;
   options: string[];
   // store answer as numeric index (server-side only)
@@ -14,7 +19,7 @@ interface Question {
 const questions: Question[] = [
   {
     "id": 1,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Which of the following best describes Piaget's theory?",
     "options": [
       "Moral development",
@@ -25,7 +30,7 @@ const questions: Question[] = [
   },
   {
     "id": 2,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "Listening skill is best developed through:",
     "options": [
       "Dictation",
@@ -36,7 +41,7 @@ const questions: Question[] = [
   },
   {
     "id": 3,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘पर्यायवाची’ का अर्थ है:",
     "options": [
       "विपरीतार्थक शब्द",
@@ -47,7 +52,7 @@ const questions: Question[] = [
   },
   {
     "id": 4,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Which of these is a prime number?",
     "options": [
       "9",
@@ -58,7 +63,7 @@ const questions: Question[] = [
   },
   {
     "id": 5,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Plants prepare their food by:",
     "options": [
       "Photosynthesis",
@@ -69,7 +74,7 @@ const questions: Question[] = [
   },
   {
     "id": 6,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Child-centered education focuses on:",
     "options": [
       "Teacher authority",
@@ -80,7 +85,7 @@ const questions: Question[] = [
   },
   {
     "id": 7,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "The primary goal of language teaching is:",
     "options": [
       "Memorizing grammar",
@@ -91,7 +96,7 @@ const questions: Question[] = [
   },
   {
     "id": 8,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
     "options": [
       "पढ़ना और याद करना",
@@ -102,7 +107,7 @@ const questions: Question[] = [
   },
   {
     "id": 9,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Area of a square with side 6 cm is:",
     "options": [
       "36 sq.cm",
@@ -113,7 +118,7 @@ const questions: Question[] = [
   },
   {
     "id": 10,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Which of the following is a renewable resource?",
     "options": [
       "Coal",
@@ -124,7 +129,7 @@ const questions: Question[] = [
   },
   {
     "id": 11,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Vygotsky emphasized the importance of:",
     "options": [
       "Individual learning",
@@ -135,7 +140,7 @@ const questions: Question[] = [
   },
   {
     "id": 12,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "‘Phonemic awareness’ refers to:",
     "options": [
       "Understanding sounds of language",
@@ -146,7 +151,7 @@ const questions: Question[] = [
   },
   {
     "id": 13,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘शब्द’ का अर्थ है:",
     "options": [
       "ध्वनियों का समूह जो अर्थपूर्ण हो",
@@ -157,7 +162,7 @@ const questions: Question[] = [
   },
   {
     "id": 14,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "The value of 3/4 + 2/4 is:",
     "options": [
       "1",
@@ -168,7 +173,7 @@ const questions: Question[] = [
   },
   {
     "id": 15,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Water changes into vapor during:",
     "options": [
       "Condensation",
@@ -179,7 +184,7 @@ const questions: Question[] = [
   },
   {
     "id": 16,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Which of the following best describes Piaget's theory?",
     "options": [
       "Moral development",
@@ -190,7 +195,7 @@ const questions: Question[] = [
   },
   {
     "id": 17,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "Listening skill is best developed through:",
     "options": [
       "Dictation",
@@ -201,7 +206,7 @@ const questions: Question[] = [
   },
   {
     "id": 18,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘पर्यायवाची’ का अर्थ है:",
     "options": [
       "विपरीतार्थक शब्द",
@@ -212,7 +217,7 @@ const questions: Question[] = [
   },
   {
     "id": 19,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Which of these is a prime number?",
     "options": [
       "9",
@@ -223,7 +228,7 @@ const questions: Question[] = [
   },
   {
     "id": 20,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Plants prepare their food by:",
     "options": [
       "Photosynthesis",
@@ -234,7 +239,7 @@ const questions: Question[] = [
   },
   {
     "id": 21,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Child-centered education focuses on:",
     "options": [
       "Teacher authority",
@@ -245,7 +250,7 @@ const questions: Question[] = [
   },
   {
     "id": 22,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "The primary goal of language teaching is:",
     "options": [
       "Memorizing grammar",
@@ -256,7 +261,7 @@ const questions: Question[] = [
   },
   {
     "id": 23,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
     "options": [
       "पढ़ना और याद करना",
@@ -267,7 +272,7 @@ const questions: Question[] = [
   },
   {
     "id": 24,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Area of a square with side 6 cm is:",
     "options": [
       "36 sq.cm",
@@ -278,7 +283,7 @@ const questions: Question[] = [
   },
   {
     "id": 25,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Which of the following is a renewable resource?",
     "options": [
       "Coal",
@@ -289,7 +294,7 @@ const questions: Question[] = [
   },
   {
     "id": 26,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Vygotsky emphasized the importance of:",
     "options": [
       "Individual learning",
@@ -300,7 +305,7 @@ const questions: Question[] = [
   },
   {
     "id": 27,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "‘Phonemic awareness’ refers to:",
     "options": [
       "Understanding sounds of language",
@@ -311,7 +316,7 @@ const questions: Question[] = [
   },
   {
     "id": 28,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘शब्द’ का अर्थ है:",
     "options": [
       "ध्वनियों का समूह जो अर्थपूर्ण हो",
@@ -322,7 +327,7 @@ const questions: Question[] = [
   },
   {
     "id": 29,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "The value of 3/4 + 2/4 is:",
     "options": [
       "1",
@@ -333,7 +338,7 @@ const questions: Question[] = [
   },
   {
     "id": 30,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Water changes into vapor during:",
     "options": [
       "Condensation",
@@ -344,7 +349,7 @@ const questions: Question[] = [
   },
   {
     "id": 31,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Which of the following best describes Piaget's theory?",
     "options": [
       "Moral development",
@@ -355,7 +360,7 @@ const questions: Question[] = [
   },
   {
     "id": 32,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "Listening skill is best developed through:",
     "options": [
       "Dictation",
@@ -366,7 +371,7 @@ const questions: Question[] = [
   },
   {
     "id": 33,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘पर्यायवाची’ का अर्थ है:",
     "options": [
       "विपरीतार्थक शब्द",
@@ -377,7 +382,7 @@ const questions: Question[] = [
   },
   {
     "id": 34,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Which of these is a prime number?",
     "options": [
       "9",
@@ -388,7 +393,7 @@ const questions: Question[] = [
   },
   {
     "id": 35,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Plants prepare their food by:",
     "options": [
       "Photosynthesis",
@@ -399,7 +404,7 @@ const questions: Question[] = [
   },
   {
     "id": 36,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Child-centered education focuses on:",
     "options": [
       "Teacher authority",
@@ -410,7 +415,7 @@ const questions: Question[] = [
   },
   {
     "id": 37,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "The primary goal of language teaching is:",
     "options": [
       "Memorizing grammar",
@@ -421,7 +426,7 @@ const questions: Question[] = [
   },
   {
     "id": 38,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
     "options": [
       "पढ़ना और याद करना",
@@ -432,7 +437,7 @@ const questions: Question[] = [
   },
   {
     "id": 39,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Area of a square with side 6 cm is:",
     "options": [
       "36 sq.cm",
@@ -443,7 +448,7 @@ const questions: Question[] = [
   },
   {
     "id": 40,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Which of the following is a renewable resource?",
     "options": [
       "Coal",
@@ -454,7 +459,7 @@ const questions: Question[] = [
   },
   {
     "id": 41,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Vygotsky emphasized the importance of:",
     "options": [
       "Individual learning",
@@ -465,7 +470,7 @@ const questions: Question[] = [
   },
   {
     "id": 42,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "‘Phonemic awareness’ refers to:",
     "options": [
       "Understanding sounds of language",
@@ -476,7 +481,7 @@ const questions: Question[] = [
   },
   {
     "id": 43,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘शब्द’ का अर्थ है:",
     "options": [
       "ध्वनियों का समूह जो अर्थपूर्ण हो",
@@ -487,7 +492,7 @@ const questions: Question[] = [
   },
   {
     "id": 44,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "The value of 3/4 + 2/4 is:",
     "options": [
       "1",
@@ -498,7 +503,7 @@ const questions: Question[] = [
   },
   {
     "id": 45,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Water changes into vapor during:",
     "options": [
       "Condensation",
@@ -509,7 +514,7 @@ const questions: Question[] = [
   },
   {
     "id": 46,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Which of the following best describes Piaget's theory?",
     "options": [
       "Moral development",
@@ -520,7 +525,7 @@ const questions: Question[] = [
   },
   {
     "id": 47,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "Listening skill is best developed through:",
     "options": [
       "Dictation",
@@ -531,7 +536,7 @@ const questions: Question[] = [
   },
   {
     "id": 48,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘पर्यायवाची’ का अर्थ है:",
     "options": [
       "विपरीतार्थक शब्द",
@@ -542,7 +547,7 @@ const questions: Question[] = [
   },
   {
     "id": 49,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Which of these is a prime number?",
     "options": [
       "9",
@@ -553,7 +558,7 @@ const questions: Question[] = [
   },
   {
     "id": 50,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Plants prepare their food by:",
     "options": [
       "Photosynthesis",
@@ -564,7 +569,7 @@ const questions: Question[] = [
   },
   {
     "id": 51,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Child-centered education focuses on:",
     "options": [
       "Teacher authority",
@@ -575,7 +580,7 @@ const questions: Question[] = [
   },
   {
     "id": 52,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "The primary goal of language teaching is:",
     "options": [
       "Memorizing grammar",
@@ -586,7 +591,7 @@ const questions: Question[] = [
   },
   {
     "id": 53,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
     "options": [
       "पढ़ना और याद करना",
@@ -597,7 +602,7 @@ const questions: Question[] = [
   },
   {
     "id": 54,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Area of a square with side 6 cm is:",
     "options": [
       "36 sq.cm",
@@ -608,7 +613,7 @@ const questions: Question[] = [
   },
   {
     "id": 55,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Which of the following is a renewable resource?",
     "options": [
       "Coal",
@@ -619,7 +624,7 @@ const questions: Question[] = [
   },
   {
     "id": 56,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Vygotsky emphasized the importance of:",
     "options": [
       "Individual learning",
@@ -630,7 +635,7 @@ const questions: Question[] = [
   },
   {
     "id": 57,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "‘Phonemic awareness’ refers to:",
     "options": [
       "Understanding sounds of language",
@@ -641,7 +646,7 @@ const questions: Question[] = [
   },
   {
     "id": 58,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘शब्द’ का अर्थ है:",
     "options": [
       "ध्वनियों का समूह जो अर्थपूर्ण हो",
@@ -652,7 +657,7 @@ const questions: Question[] = [
   },
   {
     "id": 59,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "The value of 3/4 + 2/4 is:",
     "options": [
       "1",
@@ -663,7 +668,7 @@ const questions: Question[] = [
   },
   {
     "id": 60,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Water changes into vapor during:",
     "options": [
       "Condensation",
@@ -674,7 +679,7 @@ const questions: Question[] = [
   },
   {
     "id": 61,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Which of the following best describes Piaget's theory?",
     "options": [
       "Moral development",
@@ -685,7 +690,7 @@ const questions: Question[] = [
   },
   {
     "id": 62,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "Listening skill is best developed through:",
     "options": [
       "Dictation",
@@ -696,7 +701,7 @@ const questions: Question[] = [
   },
   {
     "id": 63,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘पर्यायवाची’ का अर्थ है:",
     "options": [
       "विपरीतार्थक शब्द",
@@ -707,7 +712,7 @@ const questions: Question[] = [
   },
   {
     "id": 64,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Which of these is a prime number?",
     "options": [
       "9",
@@ -718,7 +723,7 @@ const questions: Question[] = [
   },
   {
     "id": 65,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Plants prepare their food by:",
     "options": [
       "Photosynthesis",
@@ -729,7 +734,7 @@ const questions: Question[] = [
   },
   {
     "id": 66,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Child-centered education focuses on:",
     "options": [
       "Teacher authority",
@@ -740,7 +745,7 @@ const questions: Question[] = [
   },
   {
     "id": 67,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "The primary goal of language teaching is:",
     "options": [
       "Memorizing grammar",
@@ -751,7 +756,7 @@ const questions: Question[] = [
   },
   {
     "id": 68,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
     "options": [
       "पढ़ना और याद करना",
@@ -762,7 +767,7 @@ const questions: Question[] = [
   },
   {
     "id": 69,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Area of a square with side 6 cm is:",
     "options": [
       "36 sq.cm",
@@ -773,7 +778,7 @@ const questions: Question[] = [
   },
   {
     "id": 70,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Which of the following is a renewable resource?",
     "options": [
       "Coal",
@@ -784,7 +789,7 @@ const questions: Question[] = [
   },
   {
     "id": 71,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Vygotsky emphasized the importance of:",
     "options": [
       "Individual learning",
@@ -795,7 +800,7 @@ const questions: Question[] = [
   },
   {
     "id": 72,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "‘Phonemic awareness’ refers to:",
     "options": [
       "Understanding sounds of language",
@@ -806,7 +811,7 @@ const questions: Question[] = [
   },
   {
     "id": 73,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘शब्द’ का अर्थ है:",
     "options": [
       "ध्वनियों का समूह जो अर्थपूर्ण हो",
@@ -817,7 +822,7 @@ const questions: Question[] = [
   },
   {
     "id": 74,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "The value of 3/4 + 2/4 is:",
     "options": [
       "1",
@@ -828,7 +833,7 @@ const questions: Question[] = [
   },
   {
     "id": 75,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Water changes into vapor during:",
     "options": [
       "Condensation",
@@ -839,7 +844,7 @@ const questions: Question[] = [
   },
   {
     "id": 76,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Which of the following best describes Piaget's theory?",
     "options": [
       "Moral development",
@@ -850,7 +855,7 @@ const questions: Question[] = [
   },
   {
     "id": 77,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "Listening skill is best developed through:",
     "options": [
       "Dictation",
@@ -861,7 +866,7 @@ const questions: Question[] = [
   },
   {
     "id": 78,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘पर्यायवाची’ का अर्थ है:",
     "options": [
       "विपरीतार्थक शब्द",
@@ -872,7 +877,7 @@ const questions: Question[] = [
   },
   {
     "id": 79,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Which of these is a prime number?",
     "options": [
       "9",
@@ -883,7 +888,7 @@ const questions: Question[] = [
   },
   {
     "id": 80,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Plants prepare their food by:",
     "options": [
       "Photosynthesis",
@@ -894,7 +899,7 @@ const questions: Question[] = [
   },
   {
     "id": 81,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Child-centered education focuses on:",
     "options": [
       "Teacher authority",
@@ -905,7 +910,7 @@ const questions: Question[] = [
   },
   {
     "id": 82,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "The primary goal of language teaching is:",
     "options": [
       "Memorizing grammar",
@@ -916,7 +921,7 @@ const questions: Question[] = [
   },
   {
     "id": 83,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
     "options": [
       "पढ़ना और याद करना",
@@ -927,7 +932,7 @@ const questions: Question[] = [
   },
   {
     "id": 84,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Area of a square with side 6 cm is:",
     "options": [
       "36 sq.cm",
@@ -938,7 +943,7 @@ const questions: Question[] = [
   },
   {
     "id": 85,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Which of the following is a renewable resource?",
     "options": [
       "Coal",
@@ -949,7 +954,7 @@ const questions: Question[] = [
   },
   {
     "id": 86,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Vygotsky emphasized the importance of:",
     "options": [
       "Individual learning",
@@ -960,7 +965,7 @@ const questions: Question[] = [
   },
   {
     "id": 87,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "‘Phonemic awareness’ refers to:",
     "options": [
       "Understanding sounds of language",
@@ -971,7 +976,7 @@ const questions: Question[] = [
   },
   {
     "id": 88,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘शब्द’ का अर्थ है:",
     "options": [
       "ध्वनियों का समूह जो अर्थपूर्ण हो",
@@ -982,7 +987,7 @@ const questions: Question[] = [
   },
   {
     "id": 89,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "The value of 3/4 + 2/4 is:",
     "options": [
       "1",
@@ -993,7 +998,7 @@ const questions: Question[] = [
   },
   {
     "id": 90,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Water changes into vapor during:",
     "options": [
       "Condensation",
@@ -1004,7 +1009,7 @@ const questions: Question[] = [
   },
   {
     "id": 91,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Which of the following best describes Piaget's theory?",
     "options": [
       "Moral development",
@@ -1015,7 +1020,7 @@ const questions: Question[] = [
   },
   {
     "id": 92,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "Listening skill is best developed through:",
     "options": [
       "Dictation",
@@ -1026,7 +1031,7 @@ const questions: Question[] = [
   },
   {
     "id": 93,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "‘पर्यायवाची’ का अर्थ है:",
     "options": [
       "विपरीतार्थक शब्द",
@@ -1037,7 +1042,7 @@ const questions: Question[] = [
   },
   {
     "id": 94,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Which of these is a prime number?",
     "options": [
       "9",
@@ -1048,7 +1053,7 @@ const questions: Question[] = [
   },
   {
     "id": 95,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Plants prepare their food by:",
     "options": [
       "Photosynthesis",
@@ -1059,7 +1064,7 @@ const questions: Question[] = [
   },
   {
     "id": 96,
-    "topic": "Child Development & Pedagogy",
+    "Category": "Child Development & Pedagogy",
     "text": "Child-centered education focuses on:",
     "options": [
       "Teacher authority",
@@ -1070,7 +1075,7 @@ const questions: Question[] = [
   },
   {
     "id": 97,
-    "topic": "Language I (English)",
+    "Category": "Language I (English)",
     "text": "The primary goal of language teaching is:",
     "options": [
       "Memorizing grammar",
@@ -1081,7 +1086,7 @@ const questions: Question[] = [
   },
   {
     "id": 98,
-    "topic": "Language II (Hindi)",
+    "Category": "Language II (Hindi)",
     "text": "भाषा सीखने का सबसे अच्छा तरीका है:",
     "options": [
       "पढ़ना और याद करना",
@@ -1092,7 +1097,7 @@ const questions: Question[] = [
   },
   {
     "id": 99,
-    "topic": "Mathematics",
+    "Category": "Mathematics",
     "text": "Area of a square with side 6 cm is:",
     "options": [
       "36 sq.cm",
@@ -1103,7 +1108,7 @@ const questions: Question[] = [
   },
   {
     "id": 100,
-    "topic": "Environmental Studies",
+    "Category": "Environmental Studies",
     "text": "Which of the following is a renewable resource?",
     "options": [
       "Coal",
@@ -1113,6 +1118,73 @@ const questions: Question[] = [
     "answerIndex": 1
   }
 ];
+
+// DynamoDB setup (optional). Set `QUESTIONS_TABLE` or `DDB_TABLE` in env to enable.
+const ddbTable = 'QuestionBank';
+let ddbDocClient: DynamoDBDocumentClient | null = null;
+if (ddbTable) {
+  const client = new DynamoDBClient({});
+  ddbDocClient = DynamoDBDocumentClient.from(client);
+}
+
+// Simple in-memory cache to avoid scanning DynamoDB on every request
+let dbQuestionsCache: Question[] | null = null;
+
+async function loadQuestionsFromDB(): Promise<Question[]> {
+  if (!ddbDocClient || !ddbTable) return questions;
+  if (dbQuestionsCache) return dbQuestionsCache;
+  try {
+    const res = await ddbDocClient.send(new ScanCommand({ TableName: ddbTable }));
+    const items = res.Items || [];
+    const mapped: Question[] = items.map((it: any, idx: number) => {
+      // Support both numeric and string id representations
+      const idVal = it.id ?? it.ID ?? it.pk ?? idx + 1;
+      const id = typeof idVal === 'string' ? Number(idVal) : idVal;
+      return {
+        id,
+        text: it.text || it.question || it.title || '',
+        options: Array.isArray(it.options) ? it.options : (it.options_list || it.choices || []),
+        answerIndex: typeof it.answerIndex === 'number' ? it.answerIndex : (typeof it.answer === 'number' ? it.answer : 0),
+        explanation: it.explanation,
+      } as Question;
+    });
+    dbQuestionsCache = mapped;
+    return mapped;
+  } catch (err) {
+    console.warn('Failed to load questions from DynamoDB, falling back to in-file list', String(err));
+    dbQuestionsCache = questions;
+    return questions;
+  }
+}
+
+async function getQuestionById(id: number): Promise<Question | undefined> {
+  if (!ddbDocClient || !ddbTable) {
+    return questions.find((q) => q.id === id);
+  }
+  try {
+    // Try GetCommand assuming primary key is `id`
+    const res = await ddbDocClient.send(new GetCommand({ TableName: ddbTable, Key: { id } } as any));
+    const it = res.Item;
+    if (!it) {
+      // fallback to cached scan
+      const all = await loadQuestionsFromDB();
+      return all.find((q) => q.id === id);
+    }
+    const idVal = it.id ?? it.ID ?? it.pk ?? id;
+    const realId = typeof idVal === 'string' ? Number(idVal) : idVal;
+    return {
+      id: realId,
+      text: it.text || it.question || it.title || '',
+      options: Array.isArray(it.options) ? it.options : (it.options_list || it.choices || []),
+      answerIndex: typeof it.answerIndex === 'number' ? it.answerIndex : (typeof it.answer === 'number' ? it.answer : 0),
+      explanation: it.explanation,
+    } as Question;
+  } catch (err) {
+    // final fallback
+    const all = await loadQuestionsFromDB();
+    return all.find((q) => q.id === id);
+  }
+}
 
 function stripAnswer(q: Question) {
   const { answerIndex, explanation, ...rest } = q;
@@ -1127,13 +1199,15 @@ export const listQuestions = async (event: APIGatewayEvent): Promise<APIGatewayP
   const count = qs.count ? Math.min(50, Math.max(1, Number(qs.count))) : undefined;
   const random = qs.random === 'true' || false;
 
+  const allQuestions = await loadQuestionsFromDB();
+
   if (typeof index === 'number' && !isNaN(index)) {
-    const q = questions[index % questions.length];
+    const q = allQuestions[index % allQuestions.length];
     if (!q) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Not found' }) };
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(stripAnswer(q)) };
   }
 
-  let pool = [...questions];
+  let pool = [...allQuestions];
   if (random) {
     // simple shuffle
     for (let i = pool.length - 1; i > 0; i--) {
@@ -1162,7 +1236,7 @@ export const validateAnswer = async (event: APIGatewayEvent): Promise<APIGateway
     if (index < 0 || index >= sess.ids.length) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Invalid index' }) };
 
     const qid = sess.ids[index];
-    const q = questions.find((x) => x.id === qid);
+    const q = await getQuestionById(qid);
     if (!q) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Question not found' }) };
 
     // Map selectedIndex (client-ordered) back to original index
@@ -1202,7 +1276,8 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
   try {
     const body = event.body ? JSON.parse(event.body) : {};
     const { count = 15 } = body as { count?: number };
-    const pool = shuffle(questions).slice(0, Math.min(count, questions.length));
+    const all = await loadQuestionsFromDB();
+    const pool = shuffle(all).slice(0, Math.min(count, all.length));
     const ids = pool.map((q) => q.id);
     const optionOrders = pool.map((q) => shuffle(q.options.map((_, i) => i)));
     const sessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -1210,7 +1285,10 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
     sessionStore.set(sessionId, sess);
 
     // return first question with shuffled options
-    const first = questions.find((x) => x.id === ids[0])!;
+    const first = await getQuestionById(ids[0]);
+    if (!first) {
+      return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to load first question' }) };
+    }
     const order = optionOrders[0];
     const clientOptions = order.map((oi) => first.options[oi]);
 
@@ -1231,7 +1309,8 @@ export const getSessionQuestion = async (event: APIGatewayEvent): Promise<APIGat
     if (index < 0 || index >= sess.ids.length) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'invalid index' }) };
 
     const qid = sess.ids[index];
-    const q = questions.find((x) => x.id === qid)!;
+    const q = await getQuestionById(qid);
+    if (!q) return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to load question' }) };
     const order = sess.optionOrders[index];
     const clientOptions = order.map((oi) => q.options[oi]);
 
@@ -1245,3 +1324,55 @@ export const getSessionQuestion = async (event: APIGatewayEvent): Promise<APIGat
 register('POST', '/api/questions/start', startSession);
 register('GET', '/api/questions', getSessionQuestion);
 register('POST', '/api/questions/answer', validateAnswer);
+
+// Seed endpoint: writes the in-file `questions` array into DynamoDB when called.
+// Protection: Either set ALLOW_DB_SEED=true in the environment (convenient but unsafe),
+// or set SEED_SECRET and provide it in the request body as { secret: '...' }.
+export const seedQuestions = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    // Basic protection
+    const allow = process.env.ALLOW_DB_SEED === 'true';
+    const expected = process.env.SEED_SECRET;
+    let ok = allow;
+    const body = event.body ? JSON.parse(event.body) : {};
+    if (!ok && expected) {
+      ok = body && body.secret === expected;
+    }
+    if (!ok) {
+      return { statusCode: 403, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Seeding not allowed. Set ALLOW_DB_SEED=true or provide SEED_SECRET.' }) };
+    }
+
+    if (!ddbDocClient || !ddbTable) {
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured. Set QUESTIONS_TABLE env var.' }) };
+    }
+
+    // Prepare write batches (25 items per BatchWrite)
+    const items = questions.map((q) => ({ ...q }));
+    const batches: any[] = [];
+    for (let i = 0; i < items.length; i += 25) batches.push(items.slice(i, i + 25));
+
+    for (const batch of batches) {
+      const putRequests: Array<{ PutRequest: { Item: Question } }> = batch.map((item: Question) => ({ PutRequest: { Item: item } }));
+      let params = { RequestItems: { [ddbTable]: putRequests } };
+      let resp = await ddbDocClient.send(new BatchWriteCommand(params));
+      let tries = 0;
+      while (resp && resp.UnprocessedItems && Object.keys(resp.UnprocessedItems).length > 0 && tries < 5) {
+        await new Promise((r) => setTimeout(r, 500 * (tries + 1)));
+        resp = await ddbDocClient.send(new BatchWriteCommand({ RequestItems: resp.UnprocessedItems }));
+        tries++;
+      }
+      if (resp && resp.UnprocessedItems && Object.keys(resp.UnprocessedItems).length > 0) {
+        return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Some items were not processed', details: resp.UnprocessedItems }) };
+      }
+    }
+
+    // Invalidate cache so future reads come from DB
+    dbQuestionsCache = null;
+
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, written: items.length }) };
+  } catch (err: any) {
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
+  }
+};
+
+register('POST', '/api/questions/seed', seedQuestions);

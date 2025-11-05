@@ -17,6 +17,10 @@
     "react-dom": "18.3.1",
     "react-router-dom": "^7.9.4"
   },
+  "optionalDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.500.0",
+    "@aws-sdk/lib-dynamodb": "^3.500.0"
+  },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.156",
     "@types/node": "20.11.30",

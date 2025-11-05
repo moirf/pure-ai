@@ -36,8 +36,8 @@ const QUESTION_SETS: Record<string, Question[]> = {
 
 function getDescriptionForKey(key: string) {
   switch (key) {
-    case 'noticed':
-      return 'Improve your visibility: tips on networking, personal branding, and outreach.';
+    case 'tet':
+      return 'To qualify candidates for teaching in Classes 1–8 in central government or CBSE-affiliated schools. Qualifying Marks: General: 60% (90/150) SC/ST/OBC: 55% (82/150)';
     case 'hired':
       return 'Interview readiness: practice common questions, portfolio presentation and storytelling.';
     case 'paid':
