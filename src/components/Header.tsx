@@ -1,11 +1,52 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CommandButton } from '@fluentui/react';
+
+// Simple header sign-in/session UI that stores a lightweight `user` and `sessionId` in localStorage.
+// This is intentionally minimal: production apps should use a real auth provider (Cognito, Auth0, etc.).
 
 const Header: React.FC = () => {
   const [open, setOpen] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionInput, setSessionInput] = useState('');
+
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('sessionId');
+      if (s) setSessionId(s);
+    } catch (e) {}
+  }, []);
+
+  // sign-in functionality removed from header
+
+  function useSessionId() {
+    if (!sessionInput) return;
+    try {
+      localStorage.setItem('sessionId', sessionInput);
+      setSessionId(sessionInput);
+      setSessionInput('');
+    } catch (e) {}
+  }
+
+  async function createUniqueId() {
+    try {
+      const storedUser = (() => { try { return localStorage.getItem('user'); } catch { return null; } })();
+      const userMeta = storedUser ? { user: storedUser } : undefined;
+      const allocRes = await fetch('/api/questions/attempt/allocate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ metadata: userMeta }) });
+      if (!allocRes.ok) throw new Error('allocation failed');
+      const allocData = await allocRes.json();
+      const fl = allocData.attemptId as string;
+      if (fl) {
+        localStorage.setItem('sessionId', fl);
+        setSessionId(fl);
+      }
+    } catch (e) {
+      console.warn('createUniqueId failed', e);
+    }
+  }
+  // startTest removed from header; session flow is driven elsewhere
 
   return (
     // sticky ensures the header stays at the top; z-index keeps it above content
@@ -27,16 +68,24 @@ const Header: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <ThemeToggle />
 
+          <div className="hidden sm:flex items-center gap-2">
+            <input value={sessionInput} onChange={(e) => setSessionInput(e.target.value)} placeholder="Session ID eg. FL-XXXX" className="px-2 py-1 border rounded text-sm" />
+            <div className="flex items-center gap-2">
+              <button onClick={useSessionId} className="px-3 py-1 bg-gray-200 text-sm rounded">Use Session ID</button>
+              <button title="Use existing session ID created before." aria-label="Use existing session ID created before" className="px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-sm">?</button>
+            </div>
+            <button onClick={createUniqueId} className="px-3 py-1 bg-indigo-600 text-white rounded text-sm">Create ID</button>
+          </div>
+          <ThemeToggle />
           {/* Mobile hamburger */}
-              <CommandButton
+          <CommandButton
             className="sm:hidden"
             iconProps={{ iconName: open ? 'ChromeClose' : 'GlobalNavButton' }}
             title={open ? 'Close menu' : 'Open menu'}
             ariaLabel={open ? 'Close menu' : 'Open menu'}
             onClick={() => setOpen((s) => !s)}
-              />
+          />
         </div>
       </div>
 

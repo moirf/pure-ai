@@ -4,6 +4,8 @@ import { register } from './router';
 // Optional DynamoDB support (AWS SDK v3)
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, GetCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { sessionStore as inMemorySessionStore, Session as SessionType, createAttemptForSession, getAttemptRecord, finishAttemptRecord } from './sessionStore';
+import { allocCounter, formatAttemptId, saveAttemptRecord } from './sessionStore';
 
 interface Question {
   id: number;
@@ -1161,6 +1163,8 @@ for (const q of questions as any[]) {
 
 // DynamoDB setup (optional). Read table name from env `QUESTIONS_TABLE` or `DDB_TABLE`.
 const ddbTable = process.env.QUESTIONS_TABLE || process.env.DDB_TABLE || 'QuestionBank';
+// Optional separate table for sessions/attempts. If set, counters and attempts will be stored here.
+const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || '';
 let ddbDocClient: DynamoDBDocumentClient | null = null;
 if (ddbTable) {
   const client = new DynamoDBClient({});
@@ -1169,6 +1173,10 @@ if (ddbTable) {
 
 // Simple in-memory cache to avoid scanning DynamoDB on every request
 let dbQuestionsCache: Question[] | null = null;
+
+// Use sessionStore helpers from `api/sessionStore.ts`
+const sessionStore = inMemorySessionStore;
+type Session = SessionType;
 
 async function loadQuestionsFromDB(): Promise<Question[]> {
   if (!ddbDocClient || !ddbTable) return normalizedQuestions;
@@ -1297,14 +1305,7 @@ export const validateAnswer = async (event: APIGatewayEvent): Promise<APIGateway
 };
 
 // Simple in-memory session store (ephemeral)
-type Session = {
-  id: string;
-  ids: number[]; // question ids in order for this session
-  optionOrders: number[][]; // per-question mapping: client index -> original option index
-  answers: number[]; // -1 unanswered, 1 correct, 0 wrong
-};
-
-const sessionStore = new Map<string, Session>();
+// sessionStore and Session are provided by `api/sessionStore.ts`
 
 function shuffle<T>(arr: T[]) {
   const a = arr.slice();
@@ -1318,14 +1319,80 @@ function shuffle<T>(arr: T[]) {
 export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const { count = 15 } = body as { count?: number };
+    const { count = 15, allocation, attemptId } = body as { count?: number; allocation?: Record<string, number>; attemptId?: string };
     const all = await loadQuestionsFromDB();
-    const pool = shuffle(all).slice(0, Math.min(count, all.length));
+
+    // allocation: either percentages that sum to <=100, or counts. We'll treat values <=100 and sum<=100 as percentages.
+    let selected: Question[] = [];
+    if (allocation && Object.keys(allocation).length > 0) {
+      // group questions by pk
+      const byPk = new Map<string, Question[]>();
+      for (const q of all) {
+        const key = q.pk ?? 'Unknown';
+        if (!byPk.has(key)) byPk.set(key, []);
+        byPk.get(key)!.push(q);
+      }
+
+      const total = Number(count) || 15;
+      // determine if allocation values are percentages (sum <= 100) or absolute counts
+      const vals = Object.values(allocation);
+      const sumVals = vals.reduce((s, v) => s + Number(v), 0);
+      const isPercent = sumVals <= 100;
+      const pkCounts: Record<string, number> = {};
+      if (isPercent) {
+        // percentage-based allocation
+        for (const [pk, pct] of Object.entries(allocation)) {
+          pkCounts[pk] = Math.floor((Number(pct) / 100) * total);
+        }
+        // adjust for rounding: fill remaining slots from largest buckets
+        let assigned = Object.values(pkCounts).reduce((s, v) => s + v, 0);
+        const remaining = total - assigned;
+        if (remaining > 0) {
+          const pks = Object.keys(allocation);
+          for (let i = 0; i < remaining; i++) {
+            const pick = pks[i % pks.length];
+            pkCounts[pick] = (pkCounts[pick] || 0) + 1;
+          }
+        }
+      } else {
+        // absolute counts
+        for (const [pk, v] of Object.entries(allocation)) pkCounts[pk] = Math.max(0, Math.floor(Number(v)));
+      }
+
+      // select per-pk questions
+      for (const [pk, cnt] of Object.entries(pkCounts)) {
+        const poolForPk = byPk.get(pk) || [];
+        const pick = shuffle(poolForPk).slice(0, Math.min(cnt, poolForPk.length));
+        selected.push(...pick);
+      }
+
+      // if we under-selected (not enough available or allocation small), fill from remaining random pool
+      if (selected.length < total) {
+        const remainingPool = all.filter((q) => !selected.some((s) => s.id === q.id));
+        selected.push(...shuffle(remainingPool).slice(0, total - selected.length));
+      }
+      // limit to requested count
+      selected = shuffle(selected).slice(0, Math.min(total, selected.length));
+    } else {
+      const pool = shuffle(all).slice(0, Math.min(count, all.length));
+      selected = pool;
+    }
+
+    const pool = selected;
     const ids = pool.map((q) => q.id);
     const optionOrders = pool.map((q) => shuffle(q.options.map((_, i) => i)));
     const sessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const sess: Session = { id: sessionId, ids, optionOrders, answers: new Array(ids.length).fill(-1) };
+    const sess: Session = { id: sessionId, ids, optionOrders, answers: new Array(ids.length).fill(-1), allocation };
     sessionStore.set(sessionId, sess);
+
+    // If an attemptId (FL-XXXX) was provided, update its record to include the internal session id
+    if (attemptId) {
+      try {
+        await saveAttemptRecord(attemptId, { sessionId: sessionId, allocation: sess.allocation || {} });
+      } catch (e) {
+        console.warn('Failed to attach session to attempt', attemptId, e);
+      }
+    }
 
     // return first question with shuffled options
     const first = await getQuestionById(ids[0]);
@@ -1367,6 +1434,105 @@ export const getSessionQuestion = async (event: APIGatewayEvent): Promise<APIGat
 register('POST', '/api/questions/start', startSession);
 register('GET', '/api/questions', getSessionQuestion);
 register('POST', '/api/questions/answer', validateAnswer);
+
+export const getSessionSummary = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const qs = (event.queryStringParameters || {}) as Record<string, string>;
+    const sessionId = qs.session;
+    if (!sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'session required' }) };
+    const sess = sessionStore.get(sessionId);
+    if (!sess) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'session not found' }) };
+
+    // Build per-pk stats
+    const stats: Record<string, { total: number; correct: number; wrong: number; unanswered: number }> = {};
+    for (let i = 0; i < sess.ids.length; i++) {
+      const qid = sess.ids[i];
+      const q = await getQuestionById(qid);
+      const pk = q?.pk ?? 'Unknown';
+      if (!stats[pk]) stats[pk] = { total: 0, correct: 0, wrong: 0, unanswered: 0 };
+      stats[pk].total += 1;
+      const ans = sess.answers[i];
+      if (ans === 1) stats[pk].correct += 1;
+      else if (ans === 0) stats[pk].wrong += 1;
+      else stats[pk].unanswered += 1;
+    }
+
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, stats, allocation: sess.allocation || {} }) };
+  } catch (err: any) {
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
+  }
+};
+
+register('GET', '/api/questions/summary', getSessionSummary);
+
+export const createAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const body = event.body ? JSON.parse(event.body) : {};
+    const { sessionId, metadata } = body as { sessionId?: string; metadata?: Record<string, any> };
+    if (!sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'sessionId required' }) };
+    const sess = sessionStore.get(sessionId);
+    if (!sess) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'session not found' }) };
+
+    const simple = await createAttemptForSession(sess.id, metadata);
+    const startedAt = Date.now();
+    const payload = { sessionId: sess.id, allocation: sess.allocation || {}, startedAt, metadata };
+    // createAttemptForSession already saved the record
+
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attemptId: simple, ok: true }) };
+  } catch (err: any) {
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
+  }
+};
+
+register('POST', '/api/questions/attempt', createAttempt);
+
+export const allocateAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    // Optional metadata in body
+    const body = event.body ? JSON.parse(event.body) : {};
+    const { metadata } = body as { metadata?: Record<string, any> };
+    // Allocate numeric counter and format as FL-XXXX
+    const n = await allocCounter('ATTEMPT');
+    const attemptId = formatAttemptId(n);
+    const payload = { startedAt: Date.now(), metadata };
+    await saveAttemptRecord(attemptId, payload);
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attemptId, ok: true }) };
+  } catch (err: any) {
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
+  }
+};
+
+register('POST', '/api/questions/attempt/allocate', allocateAttempt);
+
+export const getAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const qs = (event.queryStringParameters || {}) as Record<string, string>;
+    const attemptId = qs.attemptId;
+    if (!attemptId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'attemptId required' }) };
+    if (!ddbDocClient || (!ddbTable && !sessionsTable)) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
+    const item = await getAttemptRecord(attemptId);
+    if (!item) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Attempt not found' }) };
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) };
+  } catch (err: any) {
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
+  }
+};
+
+export const finishAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    const body = event.body ? JSON.parse(event.body) : {};
+    const { attemptId, answers, summary } = body as { attemptId?: string; answers?: any; summary?: any };
+    if (!attemptId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'attemptId required' }) };
+    if (!ddbDocClient || (!ddbTable && !sessionsTable)) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
+    await finishAttemptRecord(attemptId, answers, summary);
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true }) };
+  } catch (err: any) {
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
+  }
+};
+
+register('GET', '/api/questions/attempt', getAttempt);
+register('POST', '/api/questions/attempt/finish', finishAttempt);
 
 // Seed endpoint: writes the in-file `questions` array into DynamoDB when called.
 // Protection: Either set ALLOW_DB_SEED=true in the environment (convenient but unsafe),
