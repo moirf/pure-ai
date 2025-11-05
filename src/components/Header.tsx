@@ -11,6 +11,9 @@ const Header: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionInput, setSessionInput] = useState('');
+  const [sessionInfo, setSessionInfo] = useState<any>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createUserName, setCreateUserName] = useState('');
 
   useEffect(() => {
     try {
@@ -18,6 +21,21 @@ const Header: React.FC = () => {
       if (s) setSessionId(s);
     } catch (e) {}
   }, []);
+
+  useEffect(() => {
+    if (!sessionId) { setSessionInfo(null); return; }
+    // fetch session metadata to show a friendly welcome
+    (async () => {
+      try {
+        const res = await fetch(`/api/sessions?sessionId=${encodeURIComponent(sessionId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setSessionInfo(data);
+      } catch (e) {
+        console.warn('failed to fetch session info', e);
+      }
+    })();
+  }, [sessionId]);
 
   // sign-in functionality removed from header
 
@@ -32,16 +50,17 @@ const Header: React.FC = () => {
 
   async function createUniqueId() {
     try {
-      const storedUser = (() => { try { return localStorage.getItem('user'); } catch { return null; } })();
-      const userMeta = storedUser ? { user: storedUser } : undefined;
-      const allocRes = await fetch('/api/questions/attempt/allocate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ metadata: userMeta }) });
+      // allocate a session id (SessionID-centric flow). Optionally include a userName from the modal.
+      const body = createUserName ? { userName: createUserName } : {};
+      const allocRes = await fetch('/api/sessions/allocate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!allocRes.ok) throw new Error('allocation failed');
       const allocData = await allocRes.json();
-      const fl = allocData.attemptId as string;
+        const fl = allocData.sessionId as string;
       if (fl) {
         localStorage.setItem('sessionId', fl);
         setSessionId(fl);
       }
+      setShowCreateModal(false);
     } catch (e) {
       console.warn('createUniqueId failed', e);
     }
@@ -69,14 +88,21 @@ const Header: React.FC = () => {
 
         <div className="flex items-center gap-3 shrink-0">
 
-          <div className="hidden sm:flex items-center gap-2">
-            <input value={sessionInput} onChange={(e) => setSessionInput(e.target.value)} placeholder="Session ID eg. FL-XXXX" className="px-2 py-1 border rounded text-sm" />
-            <div className="flex items-center gap-2">
-              <button onClick={useSessionId} className="px-3 py-1 bg-gray-200 text-sm rounded">Use Session ID</button>
-              <button title="Use existing session ID created before." aria-label="Use existing session ID created before" className="px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-sm">?</button>
+          {sessionInfo ? (
+            <div className="hidden sm:flex items-center gap-3">
+              <div className="text-sm text-gray-700">Welcome{sessionInfo.userName ? `, ${sessionInfo.userName}` : ''} · <span className="font-mono">{sessionId}</span></div>
+              <button onClick={() => { localStorage.removeItem('sessionId'); setSessionId(null); setSessionInfo(null); }} className="px-2 py-1 text-sm bg-gray-100 rounded">Switch</button>
             </div>
-            <button onClick={createUniqueId} className="px-3 py-1 bg-indigo-600 text-white rounded text-sm">Create ID</button>
-          </div>
+          ) : (
+            <div className="hidden sm:flex items-center gap-2">
+              <input value={sessionInput} onChange={(e) => setSessionInput(e.target.value)} placeholder="Session ID eg. FL-XXXX" className="px-2 py-1 border rounded text-sm" />
+              <div className="flex items-center gap-2">
+                <button onClick={useSessionId} className="px-3 py-1 bg-gray-200 text-sm rounded">Use Session ID</button>
+                <button title="Use existing session ID created before." aria-label="Use existing session ID created before" className="px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-sm">?</button>
+              </div>
+              <button onClick={() => setShowCreateModal(true)} className="px-3 py-1 bg-indigo-600 text-white rounded text-sm">Create ID</button>
+            </div>
+          )}
           <ThemeToggle />
           {/* Mobile hamburger */}
           <CommandButton
@@ -99,6 +125,20 @@ const Header: React.FC = () => {
             <Link to="/profile" onClick={() => setOpen(false)} className="hover:underline py-2">Profile</Link>
           </div>
         </div>
+        {/* Create session modal */}
+        {showCreateModal ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white rounded shadow-lg p-4 w-11/12 max-w-md">
+              <h3 className="text-lg font-semibold mb-2">Create Session ID</h3>
+              <p className="text-sm text-gray-600 mb-3">Optionally provide a user name to associate with this Session ID.</p>
+              <input value={createUserName} onChange={(e) => setCreateUserName(e.target.value)} placeholder="Optional display name" className="w-full px-3 py-2 border rounded mb-3" />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowCreateModal(false)} className="px-3 py-1 rounded border">Cancel</button>
+                <button onClick={createUniqueId} className="px-3 py-1 rounded bg-indigo-600 text-white">Create</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
     </header>
   );
 };

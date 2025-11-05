@@ -3,7 +3,7 @@ import { DynamoDBDocumentClient, UpdateCommand, PutCommand, GetCommand } from '@
 
 // Table selection: prefer SESSIONS_TABLE, fall back to QUESTIONS_TABLE
 const ddbTable = process.env.QUESTIONS_TABLE || process.env.DDB_TABLE || 'QuestionBank';
-const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || '';
+const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || 'SessionsDb';
 const tableName = sessionsTable || ddbTable;
 
 let ddbDocClient: DynamoDBDocumentClient | null = null;
@@ -42,6 +42,29 @@ export function formatAttemptId(n: number) {
   const base = n.toString(36).toUpperCase();
   const padded = base.padStart(4, '0');
   return `FL-${padded}`;
+}
+
+export async function allocSessionId(): Promise<string> {
+  const n = await allocCounter('SESSION');
+  return formatSessionId(n);
+}
+
+export function formatSessionId(n: number) {
+  const base = n.toString(36).toUpperCase();
+  const padded = base.padStart(4, '0');
+  return `FL-${padded}`;
+}
+
+export async function saveSessionEntry(sessionId: string, payload: any) {
+  if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
+  const item = { pk: `SESSION#${sessionId}`, sk: 'META', sessionId, ...payload };
+  await ddbDocClient.send(new PutCommand({ TableName: tableName, Item: item } as any));
+}
+
+export async function getSessionEntry(sessionId: string) {
+  if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
+  const res = await ddbDocClient.send(new GetCommand({ TableName: tableName, Key: { pk: `SESSION#${sessionId}`, sk: 'META' } } as any));
+  return res.Item;
 }
 
 export async function saveAttemptRecord(attemptId: string, payload: any) {
