@@ -130,11 +130,12 @@ const Header: React.FC = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
             <div className="bg-white rounded shadow-lg p-4 w-11/12 max-w-md">
               <h3 className="text-lg font-semibold mb-2">Create Session ID</h3>
-              <p className="text-sm text-gray-600 mb-3">Optionally provide a user name to associate with this Session ID.</p>
-              <input value={createUserName} onChange={(e) => setCreateUserName(e.target.value)} placeholder="Optional display name" className="w-full px-3 py-2 border rounded mb-3" />
+              <p className="text-sm text-gray-600 mb-3">Provide a user name to associate with this Session ID (required).</p>
+              <input value={createUserName} onChange={(e) => setCreateUserName(e.target.value)} placeholder="Enter display name" className="w-full px-3 py-2 border rounded mb-1" />
+              {!createUserName.trim() ? <div className="text-xs text-red-600 mb-2">User name is required to create a Session ID.</div> : null}
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShowCreateModal(false)} className="px-3 py-1 rounded border">Cancel</button>
-                <button onClick={createUniqueId} className="px-3 py-1 rounded bg-indigo-600 text-white">Create</button>
+                <button onClick={createUniqueId} disabled={!createUserName.trim()} className={`px-3 py-1 rounded text-white ${createUserName.trim() ? 'bg-indigo-600' : 'bg-gray-300 cursor-not-allowed'}`}>Create</button>
               </div>
             </div>
           </div>

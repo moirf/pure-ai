@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Quiz from './components/Quiz';
+import HomePage from './components/pages/HomePage';
 import GalleriesPage from './components/pages/GalleriesPage';
 import ProfilePage from './components/pages/ProfilePage';
 import ProjectsPage from './components/pages/ProjectsPage';
@@ -15,7 +16,7 @@ const App: React.FC = () => {
       <main className="py-6">
         <div className="max-w-6xl mx-auto px-4">
           <Routes>
-            <Route path="/" element={<Quiz />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/quiz" element={<Quiz />} />
             <Route path="/galleries" element={<GalleriesPage />} />
             <Route path="/profile" element={<ProfilePage />} />

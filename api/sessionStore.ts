@@ -11,6 +11,14 @@ if (tableName) {
   ddbDocClient = DynamoDBDocumentClient.from(client);
 }
 
+// DB session entry (persisted)
+export type DBSessionEntry = {
+  sessionId: string;
+  userName?: string;
+  createdAt: number;
+};
+
+// Runtime in-memory Session (used while taking a quiz)
 export type Session = {
   id: string;
   ids: number[];
@@ -56,7 +64,8 @@ export function formatSessionId(n: number) {
 
 export async function saveSessionEntry(sessionId: string, payload: any) {
   if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
-  const item = { pk: `${sessionId}`, sessionId, ...payload };
+  // Use the same PK/SK schema as getSessionEntry: pk = `SESSION#<sessionId>`, sk = 'META'
+  const item = { pk: `SESSION#${sessionId}`, sk: 'META', sessionId, ...payload };
   await ddbDocClient.send(new PutCommand({ TableName: tableName, Item: item } as any));
 }
 
