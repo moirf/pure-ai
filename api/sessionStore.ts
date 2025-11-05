@@ -2,9 +2,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 // Table selection: prefer SESSIONS_TABLE, fall back to QUESTIONS_TABLE
-const ddbTable = process.env.QUESTIONS_TABLE || process.env.DDB_TABLE || 'QuestionBank';
-const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || 'SessionsDb';
-const tableName = sessionsTable || ddbTable;
+const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || 'SessionDb';
+const tableName = sessionsTable;
 
 let ddbDocClient: DynamoDBDocumentClient | null = null;
 if (tableName) {
@@ -57,7 +56,7 @@ export function formatSessionId(n: number) {
 
 export async function saveSessionEntry(sessionId: string, payload: any) {
   if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
-  const item = { pk: `SESSION#${sessionId}`, sk: 'META', sessionId, ...payload };
+  const item = { pk: `${sessionId}`, sessionId, ...payload };
   await ddbDocClient.send(new PutCommand({ TableName: tableName, Item: item } as any));
 }
 
