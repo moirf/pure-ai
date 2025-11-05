@@ -12,8 +12,11 @@ const Header: React.FC = () => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionInput, setSessionInput] = useState('');
   const [sessionInfo, setSessionInfo] = useState<any>(null);
+  const [loadingSession, setLoadingSession] = useState(false);
+  const [sessionMessage, setSessionMessage] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createUserName, setCreateUserName] = useState('');
+  const [showInfo, setShowInfo] = useState(false);
 
   useEffect(() => {
     try {
@@ -39,13 +42,35 @@ const Header: React.FC = () => {
 
   // sign-in functionality removed from header
 
-  function useSessionId() {
+  async function useSessionId() {
     if (!sessionInput) return;
+    setSessionMessage(null);
+    setLoadingSession(true);
     try {
-      localStorage.setItem('sessionId', sessionInput);
-      setSessionId(sessionInput);
-      setSessionInput('');
-    } catch (e) {}
+      const res = await fetch(`/api/sessions?sessionId=${encodeURIComponent(sessionInput)}`);
+      if (!res.ok) {
+        setSessionMessage('Session not found');
+        setLoadingSession(false);
+        return;
+      }
+      const data = await res.json();
+      // persist locally and update welcome
+      try {
+        localStorage.setItem('sessionId', sessionInput);
+        setSessionId(sessionInput);
+        setSessionInfo(data);
+        setSessionMessage('Loaded session');
+        setSessionInput('');
+      } catch (e) {
+        setSessionMessage('Failed to save session locally');
+      }
+    } catch (e) {
+      console.warn('failed to validate session', e);
+      setSessionMessage('Error validating session');
+    } finally {
+      setLoadingSession(false);
+      setTimeout(() => setSessionMessage(null), 3000);
+    }
   }
 
   async function createUniqueId() {
@@ -97,10 +122,19 @@ const Header: React.FC = () => {
             <div className="hidden sm:flex items-center gap-2">
               <input value={sessionInput} onChange={(e) => setSessionInput(e.target.value)} placeholder="Session ID eg. FL-XXXX" className="px-2 py-1 border rounded text-sm" />
               <div className="flex items-center gap-2">
-                <button onClick={useSessionId} className="px-3 py-1 bg-gray-200 text-sm rounded">Use Session ID</button>
-                <button title="Use existing session ID created before." aria-label="Use existing session ID created before" className="px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-sm">?</button>
+                <button onClick={useSessionId} disabled={!sessionInput || loadingSession} className={`px-3 py-1 text-sm rounded ${!sessionInput || loadingSession ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-gray-200'}`}>
+                  {loadingSession ? (
+                    <svg className="animate-spin inline-block w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+                  ) : 'Load Session'}
+                </button>
+                <button onClick={() => setShowInfo(true)} title="Session info" aria-label="Session info" className="p-1 rounded-full bg-blue-50 text-blue-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" className="inline-block">
+                    <path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm.75 6a1 1 0 1 1-2 0 1 1 0 0 1 2 0zM11 10.5h2v6h-2v-6z"/>
+                  </svg>
+                </button>
               </div>
-              <button onClick={() => setShowCreateModal(true)} className="px-3 py-1 bg-indigo-600 text-white rounded text-sm">Create ID</button>
+              {sessionMessage ? <div className="text-xs ml-2 text-gray-600">{sessionMessage}</div> : null}
+              <button onClick={() => setShowCreateModal(true)} className="px-3 py-1 bg-indigo-600 text-white rounded text-sm">Create Session</button>
             </div>
           )}
           <ThemeToggle />
@@ -136,6 +170,18 @@ const Header: React.FC = () => {
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShowCreateModal(false)} className="px-3 py-1 rounded border">Cancel</button>
                 <button onClick={createUniqueId} disabled={!createUserName.trim()} className={`px-3 py-1 rounded text-white ${createUserName.trim() ? 'bg-indigo-600' : 'bg-gray-300 cursor-not-allowed'}`}>Create</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {showInfo ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white rounded shadow-lg p-4 w-11/12 max-w-md">
+              <h3 className="text-lg font-semibold mb-2">About Session IDs</h3>
+              <p className="text-sm text-gray-700 mb-2">Session IDs are short, human-friendly identifiers (for example <span className="font-mono">FL-1A2B</span>) that let you return to previous quiz attempts and share progress. Click "Create Session" to generate a new ID tied to your display name.</p>
+              <p className="text-sm text-gray-600 mb-3">If you don't want others to see your attempts, keep your Session ID private.</p>
+              <div className="flex justify-end">
+                <button onClick={() => setShowInfo(false)} className="px-3 py-1 rounded border">Close</button>
               </div>
             </div>
           </div>
