@@ -31,11 +31,10 @@ export const sessionStore = new Map<string, Session>();
 
 export async function allocCounter(counterName = 'ATTEMPT'): Promise<number> {
   if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
-  const pk = 'COUNTERS';
-  const sk = counterName;
+  const sessionId = 'COUNTERS_' + counterName;
   const res = await ddbDocClient.send(new UpdateCommand({
     TableName: tableName,
-    Key: { pk, sk },
+    Key: { sessionId },
     UpdateExpression: 'SET #v = if_not_exists(#v, :zero) + :inc',
     ExpressionAttributeNames: { '#v': 'v' },
     ExpressionAttributeValues: { ':inc': 1, ':zero': 0 },
