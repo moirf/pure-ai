@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { useState, useEffect } from 'react';
 import { CommandButton } from '@fluentui/react';
 
 // Simple header sign-in/session UI that stores a lightweight `user` and `sessionId` in localStorage.
@@ -17,12 +16,26 @@ const Header: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createUserName, setCreateUserName] = useState('');
   const [showInfo, setShowInfo] = useState(false);
+  const messageTimeout = useRef<number | null>(null);
+
+  const flashSessionMessage = (msg: string) => {
+    if (messageTimeout.current) window.clearTimeout(messageTimeout.current);
+    setSessionMessage(msg);
+    messageTimeout.current = window.setTimeout(() => {
+      setSessionMessage(null);
+      messageTimeout.current = null;
+    }, 2600);
+  };
 
   useEffect(() => {
     try {
       const s = localStorage.getItem('sessionId');
       if (s) setSessionId(s);
     } catch (e) {}
+  }, []);
+
+  useEffect(() => () => {
+    if (messageTimeout.current) window.clearTimeout(messageTimeout.current);
   }, []);
 
   useEffect(() => {
@@ -44,12 +57,13 @@ const Header: React.FC = () => {
 
   async function useSessionId() {
     if (!sessionInput) return;
+    if (messageTimeout.current) window.clearTimeout(messageTimeout.current);
     setSessionMessage(null);
     setLoadingSession(true);
     try {
       const res = await fetch(`/api/sessions?sessionId=${encodeURIComponent(sessionInput)}`);
       if (!res.ok) {
-        setSessionMessage('Session not found');
+        flashSessionMessage('Session not found');
         setLoadingSession(false);
         return;
       }
@@ -59,17 +73,16 @@ const Header: React.FC = () => {
         localStorage.setItem('sessionId', sessionInput);
         setSessionId(sessionInput);
         setSessionInfo(data);
-        setSessionMessage('Loaded session');
+        flashSessionMessage('Loaded session');
         setSessionInput('');
       } catch (e) {
-        setSessionMessage('Failed to save session locally');
+        flashSessionMessage('Failed to save session locally');
       }
     } catch (e) {
       console.warn('failed to validate session', e);
-      setSessionMessage('Error validating session');
+      flashSessionMessage('Error validating session');
     } finally {
       setLoadingSession(false);
-      setTimeout(() => setSessionMessage(null), 3000);
     }
   }
 
@@ -91,8 +104,7 @@ const Header: React.FC = () => {
         if (res.ok) {
           const saved = await res.json();
           setSessionInfo(saved);
-          setSessionMessage('Session created');
-          setTimeout(() => setSessionMessage(null), 3000);
+          flashSessionMessage('Session created');
         }
       } catch (e) {
         console.warn('failed to fetch created session', e);
@@ -100,13 +112,38 @@ const Header: React.FC = () => {
       setShowCreateModal(false);
     } catch (e) {
       console.warn('createUniqueId failed', e);
+      flashSessionMessage('Failed to create session');
+    }
+  }
+
+  async function copyCurrentSession() {
+    if (!sessionId) return;
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      flashSessionMessage('Session ID copied');
+    } catch (err) {
+      try {
+        const fallback = document.createElement('textarea');
+        fallback.value = sessionId;
+        fallback.setAttribute('readonly', '');
+        fallback.style.position = 'absolute';
+        fallback.style.left = '-9999px';
+        document.body.appendChild(fallback);
+        fallback.select();
+        document.execCommand('copy');
+        document.body.removeChild(fallback);
+        flashSessionMessage('Session ID copied');
+      } catch (fallbackErr) {
+        console.warn('copyCurrentSession failed', fallbackErr);
+        flashSessionMessage('Unable to copy Session ID');
+      }
     }
   }
   // startTest removed from header; session flow is driven elsewhere
 
   return (
     // sticky ensures the header stays at the top; z-index keeps it above content
-    <header className="bg-white shadow-sm sticky top-0 z-40">
+    <header className="bg-white shadow-sm sticky top-0 z-40 relative">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between flex-nowrap">
         <div className="flex items-center gap-4 min-w-0">
           <Link to="/" className="text-xl font-bold shrink-0">Free Learning</Link>
@@ -128,6 +165,12 @@ const Header: React.FC = () => {
           {sessionInfo ? (
             <div className="hidden sm:flex items-center gap-3">
               <div className="text-sm text-gray-700">Welcome{sessionInfo.userName ? `, ${sessionInfo.userName}` : ''} · <span className="font-mono">{sessionId}</span></div>
+              <button onClick={copyCurrentSession} title="Copy Session ID" className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v16h13a2 2 0 0 0 2-2V5zm0 18H8V7h11v16z" />
+                </svg>
+                Copy
+              </button>
               <button onClick={() => { localStorage.removeItem('sessionId'); setSessionId(null); setSessionInfo(null); }} className="px-2 py-1 text-sm bg-gray-100 rounded">Switch</button>
             </div>
           ) : (
@@ -145,7 +188,6 @@ const Header: React.FC = () => {
                   </svg>
                 </button>
               </div>
-              {sessionMessage ? <div className="text-xs ml-2 text-gray-600">{sessionMessage}</div> : null}
               <button onClick={() => setShowCreateModal(true)} className="px-3 py-1 bg-indigo-600 text-white rounded text-sm">Create Session</button>
             </div>
           )}
@@ -196,6 +238,11 @@ const Header: React.FC = () => {
                 <button onClick={() => setShowInfo(false)} className="px-3 py-1 rounded border">Close</button>
               </div>
             </div>
+          </div>
+        ) : null}
+        {sessionMessage ? (
+          <div className="absolute right-4 top-full mt-2 px-3 py-2 rounded bg-gray-900 text-white text-xs shadow-md">
+            {sessionMessage}
           </div>
         ) : null}
     </header>
