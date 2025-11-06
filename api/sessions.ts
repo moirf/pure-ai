@@ -20,8 +20,8 @@ export const allocateSession = async (event: APIGatewayEvent): Promise<APIGatewa
       return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'userName is required' }) };
     }
     const sessionId = await allocSessionId();
-    const payload: any = { userName: String(userName), __options: { minimal: true } };
-    await saveSessionEntry(sessionId, payload);
+    const payload: any = { sessionId: String(sessionId), userName: String(userName) };
+    await saveSessionEntry(payload);
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, ok: true }) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
