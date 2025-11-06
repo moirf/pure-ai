@@ -85,6 +85,18 @@ const Header: React.FC = () => {
         localStorage.setItem('sessionId', fl);
         setSessionId(fl);
       }
+      // fetch the persisted session entry so we show the userName immediately
+      try {
+        const res = await fetch(`/api/sessions?sessionId=${encodeURIComponent(allocData.sessionId)}`);
+        if (res.ok) {
+          const saved = await res.json();
+          setSessionInfo(saved);
+          setSessionMessage('Session created');
+          setTimeout(() => setSessionMessage(null), 3000);
+        }
+      } catch (e) {
+        console.warn('failed to fetch created session', e);
+      }
       setShowCreateModal(false);
     } catch (e) {
       console.warn('createUniqueId failed', e);
