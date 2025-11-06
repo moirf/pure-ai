@@ -8,9 +8,9 @@ type Question = {
 };
 
 const steps = [
-  { id: 1, title: 'TET Practice', icon: '👑', key: 'tet' },
-  { id: 2, title: 'Bank PO', icon: '👑', key: 'po' },
-  { id: 3, title: 'GK', icon: '👑', key: 'gk' },
+  { id: 1, title: 'CTET 2025', icon: '👑', key: 'ctet25' },
+  { id: 2, title: 'CTET 2024', icon: '👑', key: 'ctet24' },
+  { id: 3, title: 'GKT 2025', icon: '👑', key: 'gkt25' },
   { id: 4, title: 'Math Test', icon: '👑', key: 'math' },
 ];
 
@@ -36,13 +36,13 @@ const QUESTION_SETS: Record<string, Question[]> = {
 
 function getDescriptionForKey(key: string) {
   switch (key) {
-    case 'tet':
+    case 'ctet25':
       return 'To qualify candidates for teaching in Classes 1–8 in central government or CBSE-affiliated schools. Qualifying Marks: General: 60% (90/150) SC/ST/OBC: 55% (82/150)';
-    case 'hired':
+    case 'ctet24':
       return 'Interview readiness: practice common questions, portfolio presentation and storytelling.';
-    case 'paid':
+    case 'gkt25':
       return 'Compensation & negotiation: research, positioning, and building leverage.';
-    case 'promoted':
+    case 'math':
       return 'Career growth: demonstrating impact, leadership and mentorship to earn promotion.';
     default:
       return 'Learn and grow with targeted micro-lessons for this topic.';

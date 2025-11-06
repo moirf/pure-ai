@@ -397,73 +397,7 @@ export const allocateAttempt = async (event: APIGatewayEvent): Promise<APIGatewa
 
 register('POST', '/api/questions/attempt/allocate', allocateAttempt);
 
-export const allocateSession = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
-  try {
-    // Session allocation is SessionID-centric: we persist minimal identity data.
-    // If caller provides a userName we will persist it alongside the session id (optional).
-    const body = event.body ? JSON.parse(event.body) : {};
-    const { userName } = body as { userName?: string };
-    if (!userName || String(userName).trim().length === 0) {
-      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'userName is required' }) };
-    }
-    const sessionId = await allocSessionId();
-    const payload: any = { createdAt: Date.now(), userName: String(userName) };
-    await saveSessionEntry(sessionId, payload);
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, ok: true }) };
-  } catch (err: any) {
-    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
-  }
-};
-
-export const getSession = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
-  try {
-    const qs = (event.queryStringParameters || {}) as Record<string, string>;
-    const sessionId = qs.sessionId;
-    if (!sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'sessionId required' }) };
-    if (!ddbDocClient || (!ddbTable && !sessionsTable)) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
-    const item = await getSessionEntry(sessionId);
-    if (!item) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Session not found' }) };
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) };
-  } catch (err: any) {
-    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
-  }
-};
-
-register('POST', '/api/sessions/allocate', allocateSession);
-register('GET', '/api/sessions', getSession);
-
-export const getSessionsByUser = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
-  try {
-    const qs = (event.queryStringParameters || {}) as Record<string, string>;
-    const userName = qs.userName;
-    if (!userName) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'userName required' }) };
-    if (!ddbDocClient || !ddbTable) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
-    // scan sessions for items where pk begins with SESSION# and userName matches
-    const res = await ddbDocClient.send(new ScanCommand({ TableName: ddbTable, FilterExpression: 'begins_with(pk, :s) AND #u = :u', ExpressionAttributeNames: { '#u': 'userName' }, ExpressionAttributeValues: { ':s': 'SESSION#', ':u': userName } } as any));
-    const items = res.Items || [];
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(items) };
-  } catch (err: any) {
-    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
-  }
-};
-
-export const getSessionRecords = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
-  try {
-    const qs = (event.queryStringParameters || {}) as Record<string, string>;
-    const sessionId = qs.sessionId;
-    if (!sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'sessionId required' }) };
-    if (!ddbDocClient || !ddbTable) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
-    // scan attempts for items where sessionId attribute equals provided sessionId
-    const res = await ddbDocClient.send(new ScanCommand({ TableName: ddbTable, FilterExpression: '#s = :sid AND begins_with(pk, :a)', ExpressionAttributeNames: { '#s': 'sessionId' }, ExpressionAttributeValues: { ':sid': sessionId, ':a': 'ATTEMPT#' } } as any));
-    const items = res.Items || [];
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(items) };
-  } catch (err: any) {
-    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
-  }
-};
-
-register('GET', '/api/sessions/by-user', getSessionsByUser);
-register('GET', '/api/sessions/records', getSessionRecords);
+// Session-related endpoints moved to `api/sessions.ts`
 
 export const getAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
