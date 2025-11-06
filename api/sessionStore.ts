@@ -62,10 +62,9 @@ export function formatSessionId(n: number) {
   return `FL-${padded}`;
 }
 
-export async function saveSessionEntry(sessionId: string, payload: any) {
+export async function saveSessionEntry(id: string, payload: any) {
   if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
-  // Use the same PK/SK schema as getSessionEntry: pk = `SESSION#<sessionId>`, sk = 'META'
-  const item = { sessionID: `${sessionId}`, sessionId, ...payload };
+  const item = { sessionId: `${id}`, ...payload };
   await ddbDocClient.send(new PutCommand({ TableName: tableName, Item: item } as any));
 }
 
