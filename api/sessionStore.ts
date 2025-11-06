@@ -64,13 +64,22 @@ export function formatSessionId(n: number) {
 
 export async function saveSessionEntry(id: string, payload: any) {
   if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
-  const item = { sessionId: `${id}`, ...payload };
+  const opts = payload && payload.__options ? payload.__options : {};
+  // remove internal options from payload copy
+  const p = { ...payload };
+  delete p.__options;
+
+  // Write only the minimal session DB row: `sessionId` and optional `userName`.
+  const item: any = { sessionId: String(id) };
+  if (p && p.userName) item.userName = p.userName;
+  if (p && p.createdAt) item.createdAt = p.createdAt;
   await ddbDocClient.send(new PutCommand({ TableName: tableName, Item: item } as any));
 }
 
 export async function getSessionEntry(sessionId: string) {
   if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
-  const res = await ddbDocClient.send(new GetCommand({ TableName: tableName, Key: { pk: `SESSION#${sessionId}`, sk: 'META' } } as any));
+  // Read by sessionId (SessionDb minimal schema)
+  const res = await ddbDocClient.send(new GetCommand({ TableName: tableName, Key: { sessionId } } as any));
   return res.Item;
 }
 
