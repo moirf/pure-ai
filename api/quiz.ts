@@ -4,7 +4,7 @@ import { register } from './router';
 // Optional DynamoDB support (AWS SDK v3)
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, GetCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { sessionStore as inMemorySessionStore, Session as SessionType, createAttemptForSession, getAttemptRecord, finishAttemptRecord } from './sessionStore';
+import { sessionStore as inMemorySessionStore, Session as SessionType, createAttemptForSession, getAttemptRecord, finishAttemptRecord, saveQuizResult } from './sessionStore';
 import { allocCounter, formatAttemptId, saveAttemptRecord } from './sessionStore';
 import { allocSessionId, formatSessionId, saveSessionEntry, getSessionEntry } from './sessionStore';
 
@@ -416,10 +416,22 @@ export const getAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProx
 export const finishAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const { attemptId, answers, summary } = body as { attemptId?: string; answers?: any; summary?: any };
+    const { attemptId, answers, summary, quizType } = body as { attemptId?: string; answers?: any; summary?: any; quizType?: string };
     if (!attemptId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'attemptId required' }) };
     if (!ddbDocClient || (!ddbTable && !sessionsTable)) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
     await finishAttemptRecord(attemptId, answers, summary);
+    // Attempt to save a quiz result row in QuizDb keyed by sessionId and quizId.
+    try {
+      const attempt = await getAttemptRecord(attemptId);
+      if (attempt && attempt.sessionId) {
+        const sessionId = attempt.sessionId as string;
+        const quizId = attemptId; // use attemptId as quiz identifier
+        const payload: any = { answers, summary, finishedAt: Date.now(), startedAt: attempt.startedAt };
+        await saveQuizResult(sessionId, quizId, quizType, payload);
+      }
+    } catch (e) {
+      console.warn('Failed to save quiz result', attemptId, String(e));
+    }
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true }) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };

@@ -122,3 +122,15 @@ export async function finishAttemptRecord(attemptId: string, answers?: any, summ
   const updateExpr = 'SET ' + setParts.join(', ');
   await ddbDocClient.send(new UpdateCommand({ TableName: tableName, Key: { pk: `ATTEMPT#${attemptId}`, sk: 'META' }, UpdateExpression: updateExpr, ExpressionAttributeNames: exprNames, ExpressionAttributeValues: exprValues } as any));
 }
+
+// Save a quiz result into a dedicated Quiz table. The table is expected to
+// have partition key `sessionId` and sort key `quizId`. Other fields such as
+// `quizType`, `answers` and `summary` will be stored on the item.
+export async function saveQuizResult(sessionId: string, quizId: string, quizType?: string, payload?: Record<string, any>) {
+  if (!ddbDocClient) throw new Error('DynamoDB not configured');
+  const quizTable = process.env.QUIZ_TABLE || 'QuizDb';
+  const item: any = { sessionId: String(sessionId), quizId: String(quizId) };
+  if (quizType) item.quizType = quizType;
+  if (payload) Object.assign(item, payload);
+  await ddbDocClient.send(new PutCommand({ TableName: quizTable, Item: item } as any));
+}

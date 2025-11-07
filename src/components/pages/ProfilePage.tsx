@@ -45,89 +45,6 @@ function mdToHtml(md: string) {
 }
 
 const ProfilePage: React.FC = () => {
-  const md = `Mohammad Irfan
-Senior Project Manager | Driving Technical Excellence & Team Leadership
-
-Professional Summary:
-As a Senior Project Manager, I allocate 40% of my time to Project, Stakeholder, and Risk Management, proactively addressing challenges. I lead cross-functional teams to deliver complex projects on time, including the development and launch of several successful software services. I manage relationships with stakeholders, team members, and external partners to ensure project success. I monitor project progress and address issues and risks in a timely manner. I enhance team technical strengths by encouraging continuous learning and development 
-
-Accomplishments:
-•	Over 20 years of software development experience in various roles.
-•	Over 10 years of Project Management experience with clients such as Microsoft, AMiON, Merck Manuals, and InVision.
-•	Achieved an 80% improvement in IcM handling time by fine-tuning baselines and implementing automated scripts.
-•	Reduced Release Cycle time by 80% through DevOps Continuous Integration and Continuous Delivery (CI/CD).
-•	Reduced infrastructure costs by 90% by migrating On-premises infrastructure to Azure Cloud.
-•	Achieved an additional 50% cost reduction through coexistence models of services on Azure VMs.
-•	$20M value add to customers by providing options for third-party customers to move to Microsoft.
-•	Led cross-functional teams to deliver complex projects on time.
-•	Implemented Agile methodologies and processes to improve team collaboration and productivity.
-•	Managed relationships with stakeholders, team members, and partners to ensure project success.
-•	Collaborated with product management and engineering teams to define product roadmaps.
-•	Monitored project progress and addressed issues and risks in a timely manner.
-•	Assisted other teams in implementing best practices within the current program.
-•	Enhanced team technical strengths by encouraging continuous learning and development 
-
-Education and Certificates:
-•	Master of Computer Science - MCA (AMU, Aligarh, India) – 82% Marks, Year – 2001 – 2004
-•	Bachelor of Science (BSc Physics) (AMU, Aligarh, India) – 76% Marks, Year – 1998 – 2001
-•	Microsoft Certified: Azure Solutions Architect, DevOps Engineer Expert, Security Engineer Associate
-
-Employment History:
-1.	HCL America Inc - Senior Project Manager | Jun 30th, 2025 - Present
-2.	LTIMINDTREE Ltd. (US) - Director – Program & Program Management | Jun 6th, 2024 – Jun 27th, 2025
-3.	HCL America Inc - Senior Technical Manager | Dec 31st, 2016 - Jun 5th, 2024
-4.	HCLTech (India) - Technical Manager | Jul 19th, 2007 - Dec 30th, 2016
-5.	ALS India Pvt Ltd. - Software Developer | Jul 18th, 2005 - July 17th, 2007
-
-Technical Skills:
-•	Management: Project Management, Scrum & Agile, Program Development, Customer Engagement, Risk Assessment, Tracking Progress, Stakeholder Management, Teams Training, Cross-Cultural Communication, Diversity Inclusion, Regulatory Compliance
-•	Programming: Gen-AI, GitHub Copilot, NLP, OpenAI, C# .Net, C# .Net Core, Web Services, Web API, REST API, SQL Server, React JS, Python
-•	DevOps: Build Pipelines, Continuous Integration, Continuous Delivery (CI/CD), Kubernetes, Azure Pipelines, Azure Releases, Gated Deployments, GitHub, GitHub Actions, GitLab, Feature Flags
-•	Cloud: Azure Computes, Networks, Security Management, Identity Management, Teams App Development, Microsoft Team Room Development, Azure Communication Services Development
-•	Tools: Visual Studio, Visual Studio Code, Visio, Postman, Http Analyzer, Wire Shark, Power BI, SQL SSRS, Power Apps, Teams Studio, Microsoft Tools for Development
-
-Professional Experience:
-Client: Microsoft Corporation via HCL America Inc. | Jun 30th, 2025 - Present
-Role: Senior Project Management
-Product: FastTrack 
-Responsibilities:
-•	Managing multiple Tracks for delivery along with the stakeholder management.
-•	Review Tech Specs and sizing and release planning.
-•	Security Compliance for S360 and Microsoft Defender.
-•	Reviewing PRs and providing guidance to the team, unblocking impediments
-•	Conducting scrum standup, sprint planning, review, and retrospective meetings
-Client: Microsoft Corporation via LTIMINDTREE Ltd. | Jun 6th, 2024 – Jun 27th, 2025
-Role: Director Program & Program Management
-Product: Unified Action Tracker
-Responsibilities:
-•	Managing multiple Tracks for delivery along with the stakeholder management.
-•	Review Tech Specs and sizing and release planning.
-•	Security Compliance for S360 and Microsoft Defender.
-•	Reviewing PRs and providing guidance to the team, unblocking impediments
-•	Conducting scrum standup, sprint planning, review, and retrospective meetings
-
-Client: Microsoft Corporation via HCLTech | Oct 2021 – Jun 5th, 2024
-Role: Senior Technical Manager
-Product: Microsoft Teams Rooms – Insights
-Responsibilities:
-•	Architecting the design of MTR Rooms APIs
-•	Conducting security and performance reviews for the API
-•	Designing scalability and infrastructure for IAC and release pipelines
-•	Reviewing PRs and providing guidance to the team, unblocking impediments
-•	Conducting scrum standup, sprint planning, review, and retrospective meetings
-Product: Microsoft Azure Communication Services - ACS
-Responsibilities:
-•	Showcasing the capabilities of ACS to the public to increase visibility and usage
-•	Publishing sample codes on GitHub for C# .Net, Python, Java, and JS
-•	Adding automated frameworks for covering the ACS APIs
-•	Providing support for Microsoft End customers to use the ACS SDKs
-•	Setting up POCs to showcase the capabilities of ACS
-•	Providing status updates to stakeholders and conducting business review meetings for feedback and adjustments
-
-                             
----
-
-*Generated from project data.*`;
 
   // Summarized profile data derived from the resume
   const profile = {
@@ -198,7 +115,7 @@ Responsibilities:
             <div className="bg-white rounded-lg shadow p-4">
               <h4 className="text-sm font-semibold mb-2">Contact</h4>
               <div className="text-sm text-gray-700">
-                <div>Email: a.hart@email.com</div>
+                <div>X: x.com/moirfx</div>
                 <div className="mt-1">Phone: (773) 489-3264</div>
                 <div className="mt-1">Location: Chicago, IL</div>
               </div>
