@@ -5,8 +5,11 @@ import { DynamoDBDocumentClient, UpdateCommand, PutCommand, GetCommand } from '@
 const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || 'SessionDb';
 const tableName = sessionsTable;
 
+// Optional dedicated attempts table (simpler schema: PK = attemptId)
+const quizTable = process.env.QUIZ_TABLE || 'QuizDb';
+
 let ddbDocClient: DynamoDBDocumentClient | null = null;
-if (tableName) {
+if (tableName || quizTable) {
   const client = new DynamoDBClient({});
   ddbDocClient = DynamoDBDocumentClient.from(client);
 }
@@ -44,10 +47,10 @@ export async function allocCounter(counterName = 'ATTEMPT'): Promise<number> {
   return typeof val === 'number' ? val : Number(val);
 }
 
-export function formatAttemptId(n: number) {
+export function formatQuizId(n: number) {
   const base = n.toString(36).toUpperCase();
   const padded = base.padStart(4, '0');
-  return `FL-${padded}`;
+  return `QZ-${padded}`;
 }
 
 export async function allocSessionId(): Promise<string> {
@@ -77,50 +80,57 @@ export async function getSessionEntry(sessionId: string) {
   return res.Item;
 }
 
-export async function saveAttemptRecord(attemptId: string, payload: any) {
-  if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
-  const item = { pk: `ATTEMPT#${attemptId}`, sk: 'META', attemptId, ...payload };
-  await ddbDocClient.send(new PutCommand({ TableName: tableName, Item: item } as any));
+export async function saveQuizRecord(sessionId: string, quizId: string, payload: any) {
+  if (!ddbDocClient) throw new Error('DynamoDB not configured');
+  if (quizTable) {
+    const item = { sessionId: String(sessionId), quizId: String(quizId), ...payload };
+    await ddbDocClient.send(new PutCommand({ TableName: quizTable, Item: item } as any));
+    return;
+  }
 }
 
-export async function createAttemptForSession(sessionId: string, metadata?: Record<string, any>) {
+export async function createQuizForSession(sessionId: string, metadata?: Record<string, any>) {
   const sess = sessionStore.get(sessionId);
   if (!sess) throw new Error('session not found');
-  const n = await allocCounter('ATTEMPT');
-  const attemptId = formatAttemptId(n);
+  const n = await allocCounter('QUIZ');
+  const quizId = formatQuizId(n);
   const startedAt = Date.now();
   const payload = { sessionId: sess.id, allocation: sess.allocation || {}, startedAt, metadata };
-  await saveAttemptRecord(attemptId, payload);
-  return attemptId;
+  await saveQuizRecord(sess.id, quizId, payload);
+  return quizId;
 }
 
-export async function getAttemptRecord(attemptId: string) {
-  if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
-  const res = await ddbDocClient.send(new GetCommand({ TableName: tableName, Key: { pk: `ATTEMPT#${attemptId}`, sk: 'META' } } as any));
-  return res.Item;
+export async function getQuizRecord(sessionId: string,quizId: string) {
+  if (!ddbDocClient) throw new Error('DynamoDB not configured');
+
+    const res = await ddbDocClient.send(new GetCommand({ TableName: quizTable, Key: { sessionId: sessionId, quizId: quizId } } as any));
+    return res.Item;
 }
 
-export async function finishAttemptRecord(attemptId: string, answers?: any, summary?: any) {
-  if (!ddbDocClient || !tableName) throw new Error('DynamoDB not configured');
+export async function finishQuizRecord(sessionId: string, quizId: string, answers?: any, summary?: any) {
+  if (!ddbDocClient) throw new Error('DynamoDB not configured');
   const now = Date.now();
-  const exprNames: Record<string, string> = {};
-  const exprValues: Record<string, any> = {};
-  const setParts: string[] = [];
-  if (answers !== undefined) {
-    exprNames['#a'] = 'answers';
-    exprValues[':a'] = answers;
-    setParts.push('#a = :a');
+  if (quizTable) {
+    const exprNames: Record<string, string> = {};
+    const exprValues: Record<string, any> = {};
+    const setParts: string[] = [];
+    if (answers !== undefined) {
+      exprNames['#a'] = 'answers';
+      exprValues[':a'] = answers;
+      setParts.push('#a = :a');
+    }
+    if (summary !== undefined) {
+      exprNames['#s'] = 'summary';
+      exprValues[':s'] = summary;
+      setParts.push('#s = :s');
+    }
+    exprNames['#f'] = 'finishedAt';
+    exprValues[':f'] = now;
+    setParts.push('#f = :f');
+    const updateExpr = 'SET ' + setParts.join(', ');
+    await ddbDocClient.send(new UpdateCommand({ TableName: quizTable, Key: { sessionId: quizId, quizId: quizId }, UpdateExpression: updateExpr, ExpressionAttributeNames: exprNames, ExpressionAttributeValues: exprValues } as any));
+    return;
   }
-  if (summary !== undefined) {
-    exprNames['#s'] = 'summary';
-    exprValues[':s'] = summary;
-    setParts.push('#s = :s');
-  }
-  exprNames['#f'] = 'finishedAt';
-  exprValues[':f'] = now;
-  setParts.push('#f = :f');
-  const updateExpr = 'SET ' + setParts.join(', ');
-  await ddbDocClient.send(new UpdateCommand({ TableName: tableName, Key: { pk: `ATTEMPT#${attemptId}`, sk: 'META' }, UpdateExpression: updateExpr, ExpressionAttributeNames: exprNames, ExpressionAttributeValues: exprValues } as any));
 }
 
 // Save a quiz result into a dedicated Quiz table. The table is expected to

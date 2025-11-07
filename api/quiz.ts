@@ -3,9 +3,9 @@ import { register } from './router';
 
 // Optional DynamoDB support (AWS SDK v3)
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, GetCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { sessionStore as inMemorySessionStore, Session as SessionType, createAttemptForSession, getAttemptRecord, finishAttemptRecord, saveQuizResult } from './sessionStore';
-import { allocCounter, formatAttemptId, saveAttemptRecord } from './sessionStore';
+import { DynamoDBDocumentClient, ScanCommand, GetCommand, BatchWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { sessionStore as inMemorySessionStore, Session as SessionType, createQuizForSession, getQuizRecord, finishQuizRecord, saveQuizResult } from './sessionStore';
+import { allocCounter, formatQuizId, saveQuizRecord } from './sessionStore';
 import { allocSessionId, formatSessionId, saveSessionEntry, getSessionEntry } from './sessionStore';
 
 interface Question {
@@ -56,7 +56,7 @@ for (const q of questions as any[]) {
 
 // DynamoDB setup (optional). Read table name from env `QUESTIONS_TABLE` or `DDB_TABLE`.
 const ddbTable = process.env.QUESTIONS_TABLE || process.env.DDB_TABLE || 'QuestionBank';
-// Optional separate table for sessions/attempts. If set, counters and attempts will be stored here.
+// Optional separate table for sessions/quizzes. If set, counters and quizzes will be stored here.
 const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || '';
 let ddbDocClient: DynamoDBDocumentClient | null = null;
 if (ddbTable) {
@@ -191,6 +191,30 @@ export const validateAnswer = async (event: APIGatewayEvent): Promise<APIGateway
     // Optionally record the answer in session
     sess.answers[index] = correct ? 1 : 0;
 
+    // Update question stats in the question table if DynamoDB is configured
+    try {
+      if (ddbDocClient && ddbTable) {
+        const questionPk = q.pk ?? `QUESTION#${q.id}`;
+        // increment answeredCount and correctCount/incorrectCount accordingly
+        const exprNames: any = { '#a': 'answeredCount' };
+        const exprValues: any = { ':inc': 1 };
+        let updateExpr = 'SET #a = if_not_exists(#a, :zero) + :inc';
+        exprValues[':zero'] = 0;
+        if (correct) {
+          exprNames['#c'] = 'correctCount';
+          exprValues[':incC'] = 1;
+          updateExpr += ', #c = if_not_exists(#c, :zero) + :incC';
+        } else {
+          exprNames['#w'] = 'incorrectCount';
+          exprValues[':incW'] = 1;
+          updateExpr += ', #w = if_not_exists(#w, :zero) + :incW';
+        }
+        await ddbDocClient.send(new UpdateCommand({ TableName: ddbTable, Key: { pk: questionPk, sk: q.sk ?? String(q.id) }, UpdateExpression: updateExpr, ExpressionAttributeNames: exprNames, ExpressionAttributeValues: exprValues } as any));
+      }
+    } catch (e) {
+      console.warn('Failed to update question stats', q.id, String(e));
+    }
+
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correct }) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
@@ -212,7 +236,7 @@ function shuffle<T>(arr: T[]) {
 export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const { count = 15, allocation, attemptId } = body as { count?: number; allocation?: Record<string, number>; attemptId?: string };
+    const { count = 15, allocation, quizId } = body as { count?: number; allocation?: Record<string, number>; quizId?: string };
     const all = await loadQuestionsFromDB();
 
     // allocation: either percentages that sum to <=100, or counts. We'll treat values <=100 and sum<=100 as percentages.
@@ -278,12 +302,12 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
     const sess: Session = { id: sessionId, ids, optionOrders, answers: new Array(ids.length).fill(-1), allocation };
     sessionStore.set(sessionId, sess);
 
-    // If an attemptId (FL-XXXX) was provided, update its record to include the internal session id
-    if (attemptId) {
+    // If an quizId (FL-XXXX) was provided, update its record to include the internal session id
+    if (quizId) {
       try {
-        await saveAttemptRecord(attemptId, { sessionId: sessionId, allocation: sess.allocation || {} });
+        await saveQuizRecord(quizId, { sessionId: sessionId, allocation: sess.allocation || {} });
       } catch (e) {
-        console.warn('Failed to attach session to attempt', attemptId, e);
+        console.warn('Failed to attach session to quiz', quizId, e);
       }
     }
 
@@ -358,7 +382,7 @@ export const getSessionSummary = async (event: APIGatewayEvent): Promise<APIGate
 
 register('GET', '/api/questions/summary', getSessionSummary);
 
-export const createAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+export const createQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
     const { sessionId, metadata } = body as { sessionId?: string; metadata?: Record<string, any> };
@@ -366,71 +390,81 @@ export const createAttempt = async (event: APIGatewayEvent): Promise<APIGatewayP
     const sess = sessionStore.get(sessionId);
     if (!sess) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'session not found' }) };
 
-    const simple = await createAttemptForSession(sess.id, metadata);
+    const simple = await createQuizForSession(sess.id, metadata);
     const startedAt = Date.now();
     const payload = { sessionId: sess.id, allocation: sess.allocation || {}, startedAt, metadata };
-    // createAttemptForSession already saved the record
+    // createQuizForSession already saved the record
 
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attemptId: simple, ok: true }) };
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizId: simple, ok: true }) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
   }
 };
 
-register('POST', '/api/questions/attempt', createAttempt);
+register('POST', '/api/questions/quiz', createQuiz);
 
-export const allocateAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+export const allocateQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     // Optional metadata in body
     const body = event.body ? JSON.parse(event.body) : {};
     const { metadata } = body as { metadata?: Record<string, any> };
     // Allocate numeric counter and format as FL-XXXX
     const n = await allocCounter('ATTEMPT');
-    const attemptId = formatAttemptId(n);
+    const quizId = formatQuizId(n);
     const payload = { startedAt: Date.now(), metadata };
-    await saveAttemptRecord(attemptId, payload);
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attemptId, ok: true }) };
+    await saveQuizRecord(quizId, payload);
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizId, ok: true }) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
   }
 };
 
-register('POST', '/api/questions/attempt/allocate', allocateAttempt);
+register('POST', '/api/questions/quiz/allocate', allocateQuiz);
 
 // Session-related endpoints moved to `api/sessions.ts`
 
-export const getAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+export const getQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const qs = (event.queryStringParameters || {}) as Record<string, string>;
-    const attemptId = qs.attemptId;
-    if (!attemptId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'attemptId required' }) };
+    const quizId = qs.quizId;
+    if (!quizId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'quizId required' }) };
     if (!ddbDocClient || (!ddbTable && !sessionsTable)) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
-    const item = await getAttemptRecord(attemptId);
-    if (!item) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Attempt not found' }) };
+    const item = await getQuizRecord(quizId);
+    if (!item) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Quiz not found' }) };
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
   }
 };
 
-export const finishAttempt = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+export const finishQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const { attemptId, answers, summary, quizType } = body as { attemptId?: string; answers?: any; summary?: any; quizType?: string };
-    if (!attemptId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'attemptId required' }) };
+    const { quizId, answers, summary, quizType } = body as { quizId?: string; answers?: any; summary?: any; quizType?: string };
+    if (!quizId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'quizId required' }) };
     if (!ddbDocClient || (!ddbTable && !sessionsTable)) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
-    await finishAttemptRecord(attemptId, answers, summary);
-    // Attempt to save a quiz result row in QuizDb keyed by sessionId and quizId.
+    await finishQuizRecord(quizId, answers, summary);
+    // Compute simple totals and save minimal result (total, correct, incorrect)
     try {
-      const attempt = await getAttemptRecord(attemptId);
-      if (attempt && attempt.sessionId) {
-        const sessionId = attempt.sessionId as string;
-        const quizId = attemptId; // use attemptId as quiz identifier
-        const payload: any = { answers, summary, finishedAt: Date.now(), startedAt: attempt.startedAt };
+      const quiz = await getQuizRecord(quizId);
+      if (quiz && quiz.sessionId) {
+        const sessionId = quiz.sessionId as string;
+        let total = 0;
+        let correctCount = 0;
+        let incorrectCount = 0;
+        if (Array.isArray(answers)) {
+          total = answers.length;
+          for (const a of answers) {
+            if (a === 1) correctCount++;
+            else if (a === 0) incorrectCount++;
+          }
+        }
+        const payload: any = { total, correct: correctCount, incorrect: incorrectCount, finishedAt: Date.now() };
+        if (summary !== undefined) payload.summary = summary;
         await saveQuizResult(sessionId, quizId, quizType, payload);
       }
     } catch (e) {
-      console.warn('Failed to save quiz result', attemptId, String(e));
+      console.warn('Failed to save minimal quiz result', quizId, String(e));
     }
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true }) };
   } catch (err: any) {
@@ -438,8 +472,8 @@ export const finishAttempt = async (event: APIGatewayEvent): Promise<APIGatewayP
   }
 };
 
-register('GET', '/api/questions/attempt', getAttempt);
-register('POST', '/api/questions/attempt/finish', finishAttempt);
+register('GET', '/api/questions/quiz', getQuiz);
+register('POST', '/api/questions/quiz/finish', finishQuiz);
 
 // Seed endpoint: writes the in-file `questions` array into DynamoDB when called.
 // Protection: Either set ALLOW_DB_SEED=true in the environment (convenient but unsafe),
