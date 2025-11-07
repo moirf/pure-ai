@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, UpdateCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand, PutCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 // Table selection: prefer SESSIONS_TABLE, fall back to QUESTIONS_TABLE
 const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || 'SessionDb';
@@ -143,4 +143,13 @@ export async function saveQuizResult(sessionId: string, quizId: string, quizType
   if (quizType) item.quizType = quizType;
   if (payload) Object.assign(item, payload);
   await ddbDocClient.send(new PutCommand({ TableName: quizTable, Item: item } as any));
+}
+
+// Load All quiz records for a given sessionId
+export async function getQuizRecordsForSession(sessionId: string) {
+  if (!ddbDocClient) throw new Error('DynamoDB not configured');
+  const quizTable = process.env.QUIZ_TABLE || 'QuizDb';
+  const res = await ddbDocClient.send(new QueryCommand({ TableName: quizTable, KeyConditionExpression: 'sessionId = :sid', ExpressionAttributeValues: { ':sid': sessionId } } as any));
+  const items = res.Items || [];
+  return items;
 }

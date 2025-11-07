@@ -2,7 +2,7 @@ import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { register } from './router';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import { allocSessionId, saveSessionEntry, getSessionEntry, sessionStore as inMemorySessionStore } from './sessionStore';
+import { allocSessionId, saveSessionEntry, getSessionEntry, sessionStore as inMemorySessionStore, getQuizRecordsForSession } from './sessionStore';
 
 // DynamoDB setup (optional). Read table name from env `SESSIONS_TABLE` or `SESSIONS_DDB_TABLE`.
 const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || 'SessionDb';
@@ -61,9 +61,7 @@ export const getSessionRecords = async (event: APIGatewayEvent): Promise<APIGate
     const qs = (event.queryStringParameters || {}) as Record<string, string>;
     const sessionId = qs.sessionId;
     if (!sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'sessionId required' }) };
-    if (!ddbDocClient || !sessionsTable) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
-    const res = await ddbDocClient.send(new ScanCommand({ TableName: sessionsTable, FilterExpression: '#s = :sid AND begins_with(pk, :a)', ExpressionAttributeNames: { '#s': 'sessionId' }, ExpressionAttributeValues: { ':sid': sessionId, ':a': 'ATTEMPT#' } } as any));
-    const items = res.Items || [];
+    const items = await getQuizRecordsForSession(sessionId);
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(items) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };

@@ -102,7 +102,7 @@ const Quiz: React.FC = () => {
   const [answers, setAnswers] = useState<number[]>([]); // -1 = unanswered, 1 = correct, 0 = wrong
   const [current, setCurrent] = useState(0); // index in the sequence 0..(total-1)
   const [score, setScore] = useState(0);
-  const totalQuestions = 15;
+  const totalQuestions = 5;
   const [selected, setSelected] = useState<number | null>(null);
   const [loadingQuestion, setLoadingQuestion] = useState(false);
   const [loadingSet, setLoadingSet] = useState(false);
