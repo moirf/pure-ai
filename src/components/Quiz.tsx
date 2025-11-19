@@ -99,6 +99,7 @@ const Quiz: React.FC = () => {
   // We'll fetch one question at a time from the API.
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [quizId, setQuizId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<number[]>([]); // -1 = unanswered, 1 = correct, 0 = wrong
   const [current, setCurrent] = useState(0); // index in the sequence 0..(total-1)
   const [score, setScore] = useState(0);
@@ -148,6 +149,22 @@ const Quiz: React.FC = () => {
         const data = await res.json();
         // { sessionId, index, question: { id, text, options } }
         setSessionId(data.sessionId);
+        // create a quiz linked to this session so server-side persistence can track it
+        try {
+          const createRes = await fetch('/api/questions/quiz', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: data.sessionId })
+          });
+          if (createRes.ok) {
+            const createJson = await createRes.json();
+            setQuizId(createJson.quizId || null);
+          } else {
+            console.warn('Failed to create quiz, server returned', createRes.status);
+          }
+        } catch (e) {
+          console.warn('Failed to create quiz', e);
+        }
         const q = data.question;
         setCurrentQuestion({ text: q.text || q.question || 'Untitled', choices: q.options || q.choices || [], answer: undefined });
       } catch (err) {
@@ -277,6 +294,19 @@ const Quiz: React.FC = () => {
       setStarted(false);
       setCurrentQuestion(null);
       setFinished(true);
+      // Save results to server if we have a quizId
+      try {
+        if (quizId) {
+          const summary = { score };
+          await fetch('/api/questions/quiz/finish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quizId, answers, summary, quizType: activeStep.key })
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to save quiz result', e);
+      }
     }
   };
 
@@ -288,6 +318,7 @@ const Quiz: React.FC = () => {
     setScore(0);
     setSelected(null);
     setFinished(false);
+    setQuizId(null);
   };
 
   return (
