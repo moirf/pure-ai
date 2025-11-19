@@ -100,6 +100,7 @@ const Quiz: React.FC = () => {
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [quizId, setQuizId] = useState<string | null>(null);
+  const [runtimeId, setRuntimeId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<number[]>([]); // -1 = unanswered, 1 = correct, 0 = wrong
   const [current, setCurrent] = useState(0); // index in the sequence 0..(total-1)
   const [score, setScore] = useState(0);
@@ -138,33 +139,43 @@ const Quiz: React.FC = () => {
       setScore(0);
       setSelected(null);
       setStarted(true);
+      if (!sessionId) {
+        setError('A sessionId is required. Please set a Session ID in the header before starting.');
+        setStarted(false);
+        setLoadingSet(false);
+        return;
+      }
+
+      // Allocate a persistent quizId and persist quizId -> sessionId mapping server-side
+      try {
+        const alloc = await fetch('/api/questions/quiz/allocate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ metadata: {} }) });
+        if (alloc.ok) {
+          const aj = await alloc.json();
+          setQuizId(aj.quizId || null);
+          // attempt to persist mapping immediately if we have sessionId
+          if (aj.quizId && sessionId) {
+            try {
+              await fetch('/api/questions/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, metadata: {} }) });
+            } catch (e) {
+              // non-fatal
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to allocate quizId', e);
+      }
+
       // Try to start a server session. If it fails, fall back to local fetch.
       try {
         const res = await fetch('/api/questions/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count: totalQuestions })
+          body: JSON.stringify({ count: totalQuestions, quizId, sessionId })
         });
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
-        // { sessionId, index, question: { id, text, options } }
-        setSessionId(data.sessionId);
-        // create a quiz linked to this session so server-side persistence can track it
-        try {
-          const createRes = await fetch('/api/questions/quiz', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId: data.sessionId })
-          });
-          if (createRes.ok) {
-            const createJson = await createRes.json();
-            setQuizId(createJson.quizId || null);
-          } else {
-            console.warn('Failed to create quiz, server returned', createRes.status);
-          }
-        } catch (e) {
-          console.warn('Failed to create quiz', e);
-        }
+        // { runtimeId, index, question: { id, text, options } }
+        setRuntimeId(data.runtimeId || null);
         const q = data.question;
         setCurrentQuestion({ text: q.text || q.question || 'Untitled', choices: q.options || q.choices || [], answer: undefined });
       } catch (err) {
@@ -247,12 +258,12 @@ const Quiz: React.FC = () => {
   const handleSubmitAnswer = async () => {
     if (selected === null || !currentQuestion) return;
     // If using server session, validate via API (server maps client-shuffled index to original answer)
-    if (sessionId) {
+      if (runtimeId) {
       try {
         const res = await fetch('/api/questions/answer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, index: current, selectedIndex: selected })
+          body: JSON.stringify({ sessionId: runtimeId, index: current, selectedIndex: selected })
         });
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
@@ -273,7 +284,7 @@ const Quiz: React.FC = () => {
         });
         if (correct) setScore((s) => s + 1);
       }
-    } else {
+      } else {
       // client-only validation (legacy / fallback)
       const correct = currentQuestion.answer === selected;
       setAnswers((prev) => {

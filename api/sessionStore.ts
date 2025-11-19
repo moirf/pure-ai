@@ -80,10 +80,13 @@ export async function getSessionEntry(sessionId: string) {
   return res.Item;
 }
 
-export async function saveQuizRecord(sessionId: string, quizId: string, payload: any) {
+// Save a quiz record keyed by `quizId`. The item will include `sessionId` when provided
+export async function saveQuizRecord(quizId: string, payload: any) {
   if (!ddbDocClient) throw new Error('DynamoDB not configured');
   if (quizTable) {
-    const item = { sessionId: String(sessionId), quizId: String(quizId), ...payload };
+    const item: any = { quizId: String(quizId) };
+    if (payload && payload.sessionId) item.sessionId = String(payload.sessionId);
+    if (payload) Object.assign(item, payload);
     await ddbDocClient.send(new PutCommand({ TableName: quizTable, Item: item } as any));
     return;
   }
@@ -96,18 +99,17 @@ export async function createQuizForSession(sessionId: string, metadata?: Record<
   const quizId = formatQuizId(n);
   const startedAt = Date.now();
   const payload = { sessionId: sess.id, allocation: sess.allocation || {}, startedAt, metadata };
-  await saveQuizRecord(sess.id, quizId, payload);
+  await saveQuizRecord(quizId, payload);
   return quizId;
 }
 
-export async function getQuizRecord(sessionId: string,quizId: string) {
+export async function getQuizRecord(quizId: string) {
   if (!ddbDocClient) throw new Error('DynamoDB not configured');
-
-    const res = await ddbDocClient.send(new GetCommand({ TableName: quizTable, Key: { sessionId: sessionId, quizId: quizId } } as any));
-    return res.Item;
+  const res = await ddbDocClient.send(new GetCommand({ TableName: quizTable, Key: { quizId } } as any));
+  return res.Item;
 }
 
-export async function finishQuizRecord(sessionId: string, quizId: string, answers?: any, summary?: any) {
+export async function finishQuizRecord(quizId: string, answers?: any, summary?: any) {
   if (!ddbDocClient) throw new Error('DynamoDB not configured');
   const now = Date.now();
   if (quizTable) {
@@ -128,7 +130,7 @@ export async function finishQuizRecord(sessionId: string, quizId: string, answer
     exprValues[':f'] = now;
     setParts.push('#f = :f');
     const updateExpr = 'SET ' + setParts.join(', ');
-    await ddbDocClient.send(new UpdateCommand({ TableName: quizTable, Key: { sessionId: quizId, quizId: quizId }, UpdateExpression: updateExpr, ExpressionAttributeNames: exprNames, ExpressionAttributeValues: exprValues } as any));
+    await ddbDocClient.send(new UpdateCommand({ TableName: quizTable, Key: { quizId }, UpdateExpression: updateExpr, ExpressionAttributeNames: exprNames, ExpressionAttributeValues: exprValues } as any));
     return;
   }
 }
@@ -136,10 +138,11 @@ export async function finishQuizRecord(sessionId: string, quizId: string, answer
 // Save a quiz result into a dedicated Quiz table. The table is expected to
 // have partition key `sessionId` and sort key `quizId`. Other fields such as
 // `quizType`, `answers` and `summary` will be stored on the item.
-export async function saveQuizResult(sessionId: string, quizId: string, quizType?: string, payload?: Record<string, any>) {
+export async function saveQuizResult(quizId: string, sessionId: string | undefined, quizType?: string, payload?: Record<string, any>) {
   if (!ddbDocClient) throw new Error('DynamoDB not configured');
   const quizTable = process.env.QUIZ_TABLE || 'QuizDb';
-  const item: any = { sessionId: String(sessionId), quizId: String(quizId) };
+  const item: any = { quizId: String(quizId) };
+  if (sessionId) item.sessionId = String(sessionId);
   if (quizType) item.quizType = quizType;
   if (payload) Object.assign(item, payload);
   await ddbDocClient.send(new PutCommand({ TableName: quizTable, Item: item } as any));
@@ -149,7 +152,14 @@ export async function saveQuizResult(sessionId: string, quizId: string, quizType
 export async function getQuizRecordsForSession(sessionId: string) {
   if (!ddbDocClient) throw new Error('DynamoDB not configured');
   const quizTable = process.env.QUIZ_TABLE || 'QuizDb';
-  const res = await ddbDocClient.send(new QueryCommand({ TableName: quizTable, KeyConditionExpression: 'sessionId = :sid', ExpressionAttributeValues: { ':sid': sessionId } } as any));
-  const items = res.Items || [];
-  return items;
+  // If the table is keyed by quizId (no sessionId PK/GSI), fall back to a scan and filter.
+  try {
+    const res = await ddbDocClient.send(new QueryCommand({ TableName: quizTable, KeyConditionExpression: 'sessionId = :sid', ExpressionAttributeValues: { ':sid': sessionId } } as any));
+    const items = res.Items || [];
+    return items;
+  } catch (e) {
+    const scanRes = await ddbDocClient.send(new QueryCommand({ TableName: quizTable } as any));
+    const items = scanRes.Items || [];
+    return items.filter((it: any) => it.sessionId === sessionId);
+  }
 }

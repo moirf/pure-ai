@@ -236,7 +236,9 @@ function shuffle<T>(arr: T[]) {
 export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const { count = 15, allocation, quizId } = body as { count?: number; allocation?: Record<string, number>; quizId?: string };
+    const { count = 15, allocation, quizId, sessionId } = body as { count?: number; allocation?: Record<string, number>; quizId?: string; sessionId?: string };
+    // Require both quizId and sessionId so the server can persist the mapping quizId -> sessionId
+    if (!quizId || !sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'quizId and sessionId are required' }) };
     const all = await loadQuestionsFromDB();
 
     // allocation: either percentages that sum to <=100, or counts. We'll treat values <=100 and sum<=100 as percentages.
@@ -298,14 +300,27 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
     const pool = selected;
     const ids = pool.map((q) => q.id);
     const optionOrders = pool.map((q) => shuffle(q.options.map((_, i) => i)));
-    const sessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const sess: Session = { id: sessionId, ids, optionOrders, answers: new Array(ids.length).fill(-1), allocation };
-    sessionStore.set(sessionId, sess);
+    // Create a short-lived runtime id (ephemeral) and store the runtime session in-memory
+    const runtimeId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const sess: Session = { id: runtimeId, ids, optionOrders, answers: new Array(ids.length).fill(-1), allocation };
+    sessionStore.set(runtimeId, sess);
 
-    // If an quizId (FL-XXXX) was provided, update its record to include the internal session id
+    // If a persistent quizId was provided, attach the runtime session's sessionId to it
+    // Persist mapping quizId -> sessionId if a persistent sessionId is provided
     if (quizId) {
       try {
-        await saveQuizRecord(quizId, { sessionId: sessionId, allocation: sess.allocation || {} });
+        if (sessionId) {
+          await saveQuizRecord(quizId, { sessionId: sessionId, allocation: sess.allocation || {} });
+        } else {
+          // If no sessionId provided in body, attempt to preserve any existing sessionId on quiz record
+          const existing = await getQuizRecord(quizId).catch(() => null);
+          if (existing && existing.sessionId) {
+            // nothing to do; mapping already exists
+          } else {
+            // persist without sessionId for now; callers should pass sessionId when available
+            await saveQuizRecord(quizId, { allocation: sess.allocation || {} });
+          }
+        }
       } catch (e) {
         console.warn('Failed to attach session to quiz', quizId, e);
       }
@@ -319,7 +334,8 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
     const order = optionOrders[0];
     const clientOptions = order.map((oi) => first.options[oi]);
 
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, index: 0, question: { id: first.id, text: first.text, options: clientOptions } }) };
+    // Return the ephemeral runtime id for client-side use in subsequent in-quiz calls
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runtimeId, index: 0, question: { id: first.id, text: first.text, options: clientOptions } }) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
   }
@@ -328,10 +344,11 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
 export const getSessionQuestion = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const qs = (event.queryStringParameters || {}) as Record<string, string>;
-    const sessionId = qs.session;
+    // Here `session` is the ephemeral runtimeId produced by /api/questions/start
+    const runtimeId = qs.session;
     const index = qs.index ? Number(qs.index) : 0;
-    if (!sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'session required' }) };
-    const sess = sessionStore.get(sessionId);
+    if (!runtimeId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'runtime session required' }) };
+    const sess = sessionStore.get(runtimeId);
     if (!sess) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'session not found' }) };
     if (index < 0 || index >= sess.ids.length) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'invalid index' }) };
 
@@ -341,7 +358,7 @@ export const getSessionQuestion = async (event: APIGatewayEvent): Promise<APIGat
     const order = sess.optionOrders[index];
     const clientOptions = order.map((oi) => q.options[oi]);
 
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, index, question: { id: q.id, text: q.text, options: clientOptions } }) };
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runtimeId, index, question: { id: q.id, text: q.text, options: clientOptions } }) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
   }
@@ -355,9 +372,9 @@ register('POST', '/api/questions/answer', validateAnswer);
 export const getSessionSummary = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const qs = (event.queryStringParameters || {}) as Record<string, string>;
-    const sessionId = qs.session;
-    if (!sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'session required' }) };
-    const sess = sessionStore.get(sessionId);
+    const runtimeId = qs.session;
+    if (!runtimeId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'runtime session required' }) };
+    const sess = sessionStore.get(runtimeId);
     if (!sess) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'session not found' }) };
 
     // Build per-pk stats
@@ -374,7 +391,7 @@ export const getSessionSummary = async (event: APIGatewayEvent): Promise<APIGate
       else stats[pk].unanswered += 1;
     }
 
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, stats, allocation: sess.allocation || {} }) };
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runtimeId, stats, allocation: sess.allocation || {} }) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
   }
@@ -461,7 +478,7 @@ export const finishQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProx
         }
         const payload: any = { total, correct: correctCount, incorrect: incorrectCount, finishedAt: Date.now() };
         if (summary !== undefined) payload.summary = summary;
-        await saveQuizResult(sessionId, quizId, quizType, payload);
+        await saveQuizResult(quizId, sessionId, quizType, payload);
       }
     } catch (e) {
       console.warn('Failed to save minimal quiz result', quizId, String(e));

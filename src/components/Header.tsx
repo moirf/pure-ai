@@ -40,6 +40,9 @@ const Header: React.FC = () => {
 
   useEffect(() => {
     if (!sessionId) { setSessionInfo(null); return; }
+    try {
+      localStorage.setItem('sessionId', sessionId);
+    } catch (e) {}
     // fetch session metadata to show a friendly welcome
     (async () => {
       try {
