@@ -128,6 +128,14 @@ const Quiz: React.FC = () => {
     return () => window.removeEventListener('resize', resetCenter);
   }, [active]);
 
+  // Initialize sessionId from localStorage so the quiz picks up the persisted session automatically
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('sessionId');
+      if (s) setSessionId(s);
+    } catch (e) {}
+  }, []);
+
   const startSet = async () => {
     const setKey = activeStep.key;
     setLoadingSet(true);
@@ -197,8 +205,10 @@ const Quiz: React.FC = () => {
     try {
       const key = setKey ?? activeStep.key;
       // If we have a server session, use the session endpoint which returns shuffled options but not the answer.
-      if (sessionId) {
-        const res = await fetch(`/api/questions?session=${encodeURIComponent(sessionId)}&index=${index}`);
+      // Prefer the ephemeral runtimeId for in-quiz calls. Fall back to sessionId for legacy behaviour.
+      const sessionKey = runtimeId || sessionId;
+      if (sessionKey) {
+        const res = await fetch(`/api/questions?session=${encodeURIComponent(sessionKey)}&index=${index}`);
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
         const q = data.question;
