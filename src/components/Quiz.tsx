@@ -154,23 +154,17 @@ const Quiz: React.FC = () => {
         return;
       }
 
-      // Allocate a persistent quizId and persist quizId -> sessionId mapping server-side
+      // Create a persistent quizId linked to this session on the server
       try {
-        const alloc = await fetch('/api/questions/quiz/allocate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ metadata: {} }) });
-        if (alloc.ok) {
-          const aj = await alloc.json();
-          setQuizId(aj.quizId || null);
-          // attempt to persist mapping immediately if we have sessionId
-          if (aj.quizId && sessionId) {
-            try {
-              await fetch('/api/questions/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, metadata: {} }) });
-            } catch (e) {
-              // non-fatal
-            }
-          }
+        const createRes = await fetch('/api/questions/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, metadata: {} }) });
+        if (createRes.ok) {
+          const createJson = await createRes.json();
+          setQuizId(createJson.quizId || null);
+        } else {
+          console.warn('Failed to create quiz on server', createRes.status);
         }
       } catch (e) {
-        console.warn('Failed to allocate quizId', e);
+        console.warn('Failed to create quiz', e);
       }
 
       // Try to start a server session. If it fails, fall back to local fetch.

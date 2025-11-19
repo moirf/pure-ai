@@ -404,15 +404,15 @@ export const createQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProx
     const body = event.body ? JSON.parse(event.body) : {};
     const { sessionId, metadata } = body as { sessionId?: string; metadata?: Record<string, any> };
     if (!sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'sessionId required' }) };
-    const sess = sessionStore.get(sessionId);
-    if (!sess) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'session not found' }) };
 
-    const simple = await createQuizForSession(sess.id, metadata);
+    // Allocate a quizId and persist a quiz record linked to the provided persistent sessionId.
+    const n = await allocCounter('ATTEMPT');
+    const quizId = formatQuizId(n);
     const startedAt = Date.now();
-    const payload = { sessionId: sess.id, allocation: sess.allocation || {}, startedAt, metadata };
-    // createQuizForSession already saved the record
+    const payload = { sessionId: sessionId, allocation: {}, startedAt, metadata };
+    await saveQuizRecord(quizId, payload);
 
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizId: simple, ok: true }) };
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizId, ok: true }) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
   }
