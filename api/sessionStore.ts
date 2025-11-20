@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, UpdateCommand, PutCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand, PutCommand, GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 // Table selection: prefer SESSIONS_TABLE, fall back to QUESTIONS_TABLE
 const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || 'SessionDb';
@@ -148,17 +148,45 @@ export async function saveQuizResult(quizId: string, sessionId: string | undefin
   await ddbDocClient.send(new PutCommand({ TableName: quizTable, Item: item } as any));
 }
 
+// Convenience: write a single quiz result row keyed by `sessionId` and `quizId`.
+// This stores answers, summary and any result payload on one item which makes
+// querying by sessionId straightforward.
+export async function saveQuizResultSingleRow(
+  quizId: string,
+  sessionId: string,
+  quizType?: string,
+  answers?: any,
+  summary?: any,
+  payload?: Record<string, any>
+) {
+  if (!ddbDocClient) throw new Error('DynamoDB not configured');
+  const quizTableName = process.env.QUIZ_TABLE || 'QuizDb';
+  const item: any = { sessionId: String(sessionId), quizId: String(quizId) };
+  if (quizType) item.quizType = quizType;
+  if (answers !== undefined) item.answers = answers;
+  if (summary !== undefined) item.summary = summary;
+  if (payload) Object.assign(item, payload);
+  // Use PutCommand to create/replace the single row for this session+quiz.
+  await ddbDocClient.send(new PutCommand({ TableName: quizTableName, Item: item } as any));
+}
+
 // Load All quiz records for a given sessionId
 export async function getQuizRecordsForSession(sessionId: string) {
   if (!ddbDocClient) throw new Error('DynamoDB not configured');
   const quizTable = process.env.QUIZ_TABLE || 'QuizDb';
-  // If the table is keyed by quizId (no sessionId PK/GSI), fall back to a scan and filter.
+  // Try querying a GSI on sessionId (index name 'sessionId-index'). If the index
+  // does not exist (table keyed by quizId), fall back to a Scan and filter by sessionId.
   try {
-    const res = await ddbDocClient.send(new QueryCommand({ TableName: quizTable, KeyConditionExpression: 'sessionId = :sid', ExpressionAttributeValues: { ':sid': sessionId } } as any));
+    const res = await ddbDocClient.send(new QueryCommand({
+      TableName: quizTable,
+      IndexName: 'sessionId-index',
+      KeyConditionExpression: 'sessionId = :sid',
+      ExpressionAttributeValues: { ':sid': sessionId }
+    } as any));
     const items = res.Items || [];
     return items;
   } catch (e) {
-    const scanRes = await ddbDocClient.send(new QueryCommand({ TableName: quizTable } as any));
+    const scanRes = await ddbDocClient.send(new ScanCommand({ TableName: quizTable } as any));
     const items = scanRes.Items || [];
     return items.filter((it: any) => it.sessionId === sessionId);
   }

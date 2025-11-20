@@ -4,7 +4,7 @@ import { register } from './router';
 // Optional DynamoDB support (AWS SDK v3)
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, GetCommand, BatchWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { sessionStore as inMemorySessionStore, Session as SessionType, createQuizForSession, getQuizRecord, finishQuizRecord, saveQuizResult } from './sessionStore';
+import { sessionStore as inMemorySessionStore, Session as SessionType, createQuizForSession, getQuizRecord, finishQuizRecord, saveQuizResult, saveQuizResultSingleRow } from './sessionStore';
 import { allocCounter, formatQuizId, saveQuizRecord } from './sessionStore';
 import { allocSessionId, formatSessionId, saveSessionEntry, getSessionEntry } from './sessionStore';
 
@@ -460,28 +460,42 @@ export const finishQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProx
     const { quizId, answers, summary, quizType } = body as { quizId?: string; answers?: any; summary?: any; quizType?: string };
     if (!quizId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'quizId required' }) };
     if (!ddbDocClient || (!ddbTable && !sessionsTable)) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'DynamoDB not configured' }) };
-    await finishQuizRecord(quizId, answers, summary);
-    // Compute simple totals and save minimal result (total, correct, incorrect)
+    // Attempt to write answers + summary as a single row keyed by sessionId + quizId.
+    // This simplifies querying by session. If that fails, fall back to the
+    // legacy two-step approach (update quiz record + write result row).
     try {
       const quiz = await getQuizRecord(quizId);
-      if (quiz && quiz.sessionId) {
-        const sessionId = quiz.sessionId as string;
-        let total = 0;
-        let correctCount = 0;
-        let incorrectCount = 0;
-        if (Array.isArray(answers)) {
-          total = answers.length;
-          for (const a of answers) {
-            if (a === 1) correctCount++;
-            else if (a === 0) incorrectCount++;
+      const sessionId = quiz && quiz.sessionId ? String(quiz.sessionId) : undefined;
+      if (sessionId) {
+        try {
+          await saveQuizResultSingleRow(quizId, sessionId, quizType, answers, summary, undefined);
+        } catch (err) {
+          // fallback
+          await finishQuizRecord(quizId, answers, summary);
+          try {
+            let total = 0;
+            let correctCount = 0;
+            let incorrectCount = 0;
+            if (Array.isArray(answers)) {
+              total = answers.length;
+              for (const a of answers) {
+                if (a === 1) correctCount++;
+                else if (a === 0) incorrectCount++;
+              }
+            }
+            const payload: any = { total, correct: correctCount, incorrect: incorrectCount, finishedAt: Date.now() };
+            if (summary !== undefined) payload.summary = summary;
+            await saveQuizResult(quizId, sessionId, quizType, payload);
+          } catch (e) {
+            console.warn('Failed to save minimal quiz result after fallback', quizId, String(e));
           }
         }
-        const payload: any = { total, correct: correctCount, incorrect: incorrectCount, finishedAt: Date.now() };
-        if (summary !== undefined) payload.summary = summary;
-        await saveQuizResult(quizId, sessionId, quizType, payload);
+      } else {
+        // No sessionId available: fall back to updating the quiz record only
+        await finishQuizRecord(quizId, answers, summary);
       }
-    } catch (e) {
-      console.warn('Failed to save minimal quiz result', quizId, String(e));
+    } catch (err) {
+      console.warn('Failed to finalize quiz result', quizId, String(err));
     }
     return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true }) };
   } catch (err: any) {
