@@ -100,6 +100,7 @@ const InfoCard: React.FC<{ tone?: 'green' | 'purple'; title: string; children: R
 const Quiz: React.FC = () => {
   const [active, setActive] = useState<number>(4);
   const [started, setStarted] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
   // We'll fetch one question at a time from the API.
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -132,6 +133,13 @@ const Quiz: React.FC = () => {
     return () => window.removeEventListener('resize', resetCenter);
   }, [active]);
 
+  useEffect(() => {
+    // Try to flush any pending results saved while offline or when server failed.
+    try {
+      flushPendingResults();
+    } catch (e) {}
+  }, []);
+
   // Initialize sessionId from localStorage so the quiz picks up the persisted session automatically
   useEffect(() => {
     try {
@@ -151,6 +159,7 @@ const Quiz: React.FC = () => {
       setScore(0);
       setSelected(null);
       setStarted(true);
+      setStartedAt(Date.now());
       if (!sessionId) {
         setError('A sessionId is required. Please set a Session ID in the header before starting.');
         setStarted(false);
@@ -235,26 +244,48 @@ const Quiz: React.FC = () => {
         const data = await res.json();
         // API may return an array or a single object.
         let q: any = null;
-        if (Array.isArray(data)) {
-          // prefer the provided index if available, else take first
-          q = data[index] ?? data[0];
-        } else {
-          q = data;
-        }
-        if (!q) throw new Error('No question returned');
-        const parsed: Question = {
-          text: q.text || q.question || 'Untitled',
-          choices: Array.isArray(q.choices) ? q.choices : q.options || [],
-          answer: typeof q.answer === 'number' ? q.answer : undefined,
-        };
-
-        setCurrentQuestion(parsed);
-        setSelected(null);
+          if (Array.isArray(data)) {
+            // prefer the provided index if available, else take first
+            q = data[index] ?? data[0];
+          } else {
+            q = data;
+          }
+          if (!q) throw new Error('No question returned');
+          const parsed: Question = {
+            text: q.text || q.question || 'Untitled',
+            choices: Array.isArray(q.choices) ? q.choices : q.options || [],
+            answer: typeof q.answer === 'number' ? q.answer : undefined,
+          };
+          setCurrentQuestion(parsed);
+          setSelected(null);
       }
     } catch (err: any) {
       // fallback: pick a random question from local set
       console.warn('Failed to fetch question, falling back to local sample:', err?.message || err);
       const local = QUESTION_SETS[activeStep.key] || [];
+        // Flush any pending quiz results stored in localStorage. Called on mount.
+        async function flushPendingResults() {
+          try {
+            const key = 'pendingQuizResults';
+            const raw = localStorage.getItem(key);
+            if (!raw) return;
+            const arr = JSON.parse(raw) as any[];
+            if (!Array.isArray(arr) || arr.length === 0) return;
+            const remaining: any[] = [];
+            for (const item of arr) {
+              try {
+                const res = await fetch('/api/questions/quiz/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+                if (!res.ok) throw new Error(`Server returned ${res.status}`);
+              } catch (e) {
+                remaining.push(item);
+              }
+            }
+            if (remaining.length > 0) localStorage.setItem(key, JSON.stringify(remaining));
+            else localStorage.removeItem(key);
+          } catch (err) {
+            console.warn('flushPendingResults failed', err);
+          }
+        }
       const pick = local.length ? local[index % local.length] : { text: 'Fallback question', choices: ['A', 'B', 'C'], answer: 0 };
       setCurrentQuestion(pick);
       setError(err?.message ? String(err.message) : 'Failed to fetch question');
@@ -272,11 +303,12 @@ const Quiz: React.FC = () => {
       setSelected(idx);
     }
   };
-
   const handleSubmitAnswer = async () => {
     if (selected === null || !currentQuestion) return;
-    // If using server session, validate via API (server maps client-shuffled index to original answer)
-      if (runtimeId) {
+
+    // Validate answer (server or client)
+    let isCorrect = false;
+    if (runtimeId) {
       try {
         const res = await fetch('/api/questions/answer', {
           method: 'POST',
@@ -285,56 +317,60 @@ const Quiz: React.FC = () => {
         });
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
-        const correct = !!data.correct;
-        setAnswers((prev) => {
-          const copy = [...prev];
-          copy[current] = correct ? 1 : 0;
-          return copy;
-        });
-        if (correct) setScore((s) => s + 1);
-      } catch (err: any) {
-        console.warn('Validation failed, falling back to client check', err?.message || err);
-        const correct = currentQuestion.answer === selected;
-        setAnswers((prev) => {
-          const copy = [...prev];
-          copy[current] = correct ? 1 : 0;
-          return copy;
-        });
-        if (correct) setScore((s) => s + 1);
+        isCorrect = !!data.correct;
+      } catch (err) {
+        console.warn('Validation failed, falling back to client check', err);
+        isCorrect = currentQuestion.answer === selected;
       }
-      } else {
-      // client-only validation (legacy / fallback)
-      const correct = currentQuestion.answer === selected;
-      setAnswers((prev) => {
-        const copy = [...prev];
-        copy[current] = correct ? 1 : 0;
-        return copy;
-      });
-      if (correct) setScore((s) => s + 1);
+    } else {
+      isCorrect = currentQuestion.answer === selected;
     }
+
+    setAnswers((prev) => {
+      const copy = [...prev];
+      copy[current] = isCorrect ? 1 : 0;
+      return copy;
+    });
+    if (isCorrect) setScore((s) => s + 1);
 
     const next = current + 1;
     if (next < totalQuestions) {
       setCurrent(next);
-      // fetch next question (session-aware)
       await fetchQuestion(next);
-    } else {
-      // finished
-      setStarted(false);
-      setCurrentQuestion(null);
-      setFinished(true);
-      // Save results to server if we have a quizId
+      return;
+    }
+
+    // finished
+    setStarted(false);
+    setCurrentQuestion(null);
+    setFinished(true);
+
+    // Save results to server if we have a quizId; if that fails, persist locally for retry
+    if (!quizId) return;
+
+    const finishedAt = Date.now();
+    const durationMs = startedAt ? (finishedAt - startedAt) : undefined;
+    const total = answers.length;
+    const percent = Math.round((score / Math.max(1, total)) * 100);
+    const summary = { score, total, percent, durationMs, startedAt, finishedAt };
+    const payload = { quizId, answers, summary, quizType: activeStep.key };
+
+    try {
+      const res = await fetch('/api/questions/quiz/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    } catch (e) {
       try {
-        if (quizId) {
-          const summary = { score };
-          await fetch('/api/questions/quiz/finish', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quizId, answers, summary, quizType: activeStep.key })
-          });
-        }
-      } catch (e) {
-        console.warn('Failed to save quiz result', e);
+        const key = 'pendingQuizResults';
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        existing.push(payload);
+        localStorage.setItem(key, JSON.stringify(existing));
+        console.warn('Saved quiz result to localStorage pending queue', e);
+      } catch (le) {
+        console.warn('Failed to persist pending quiz result', le);
       }
     }
   };
@@ -349,6 +385,30 @@ const Quiz: React.FC = () => {
     setFinished(false);
     setQuizId(null);
   };
+
+  // Flush any pending quiz results stored in localStorage. Called on mount.
+  async function flushPendingResults() {
+    try {
+      const key = 'pendingQuizResults';
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const arr = JSON.parse(raw) as any[];
+      if (!Array.isArray(arr) || arr.length === 0) return;
+      const remaining: any[] = [];
+      for (const item of arr) {
+        try {
+          const res = await fetch('/api/questions/quiz/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+          if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        } catch (e) {
+          remaining.push(item);
+        }
+      }
+      if (remaining.length > 0) localStorage.setItem(key, JSON.stringify(remaining));
+      else localStorage.removeItem(key);
+    } catch (err) {
+      console.warn('flushPendingResults failed', err);
+    }
+  }
 
   return (
     <div className="w-full px-6 md:px-10">
