@@ -155,11 +155,21 @@ const Quiz: React.FC = () => {
       }
 
       // Create a persistent quizId linked to this session on the server
+      // create a quiz on the server and capture the returned id in a local
+      // variable. We cannot rely on `setQuizId` then reading `quizId` because
+      // React state updates are async — the `quizId` state will still be stale
+      // in this function. Using `newQuizId` guarantees we send the correct id.
+      let newQuizId: string | null = quizId;
       try {
-        const createRes = await fetch('/api/questions/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, metadata: {} }) });
+        const createRes = await fetch('/api/questions/quiz', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, metadata: {} })
+        });
         if (createRes.ok) {
           const createJson = await createRes.json();
-          setQuizId(createJson.quizId || null);
+          newQuizId = createJson.quizId ?? null;
+          setQuizId(newQuizId);
         } else {
           console.warn('Failed to create quiz on server', createRes.status);
         }
@@ -172,7 +182,7 @@ const Quiz: React.FC = () => {
         const res = await fetch('/api/questions/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count: totalQuestions, quizId, sessionId })
+          body: JSON.stringify({ count: totalQuestions, quizId: newQuizId ?? quizId, sessionId })
         });
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
