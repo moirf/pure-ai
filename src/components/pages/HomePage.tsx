@@ -82,22 +82,57 @@ const HomePage: React.FC = () => {
           {loading ? <div>Loading...</div> : null}
           {records && records.length === 0 ? <div className="text-gray-600">No attempts found for this session.</div> : null}
           {records && records.length > 0 ? (
-            <div>
-              <ul className="space-y-3">
+              <div>
+               <ul className="space-y-3">
                 {visibleRecords.map((r, i) => {
                   const s = summarize(r);
+                  const recTotal = typeof s.total === 'number' ? s.total : (Array.isArray(r.answers) ? r.answers.length : 0);
+                  const recCorrect = typeof s.correct === 'number' ? s.correct : (Array.isArray(r.answers) ? r.answers.filter((a: any) => a === 1).length : 0);
+                  const recIncorrect = Array.isArray(r.answers) ? r.answers.filter((a: any) => a === 0).length : Math.max(0, recTotal - recCorrect);
+                  const recUnanswered = Math.max(0, recTotal - recCorrect - recIncorrect);
+                  const quizType = (r.quizType || r.type || (r.metadata && r.metadata.quizType) || (r.metadata && r.metadata.type) || (r.summary && r.summary.quizType) || 'unknown');
+                  const quizIdDisplay = r.quizId || r.QuizId || r.attemptId || r.AttemptId || 'unknown';
                   return (
                     <li key={r.quizId || r.attemptId || i} className="p-3 border rounded">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-sm text-gray-700">Quiz: <span className="font-mono">{r.quizId || r.QuizId || r.attemptId || r.AttemptId || 'unknown'}</span></div>
-                          <div className="text-xs text-gray-500">Started: {s.started ? new Date(s.started).toLocaleString() : (r.startedAt ? new Date(Number(r.startedAt)).toLocaleString() : 'unknown')}</div>
+                          <div className="text-sm text-gray-700">Quiz : <span className="font-mono">{quizType} : {quizIdDisplay}</span></div>
+                          <div className="text-xs text-gray-500">Taken at: {s.started ? new Date(s.started).toLocaleString() : (r.startedAt ? new Date(Number(r.startedAt)).toLocaleString() : 'unknown')}</div>
                         </div>
-                        <div className="text-right">
-                          {s.pct !== undefined ? <div className="text-sm font-semibold">{s.pct}%</div> : null}
-                          {s.duration !== undefined ? <div className="text-xs text-gray-500">{Math.round(s.duration/1000)}s</div> : null}
+                        <div className="text-right flex items-center gap-3">
+                          {recTotal > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <div style={{ width: 120 }}>
+                                <svg width="100%" height="12" viewBox="0 0 120 12" preserveAspectRatio="none">
+                                  {(() => {
+                                    const w = 120;
+                                    const total = recTotal || 1;
+                                    const cW = Math.round((recCorrect / total) * w);
+                                    const iW = Math.round((recIncorrect / total) * w);
+                                    const uW = Math.max(0, w - cW - iW);
+                                    let x = 0;
+                                    const parts = [] as any[];
+                                    if (cW > 0) { parts.push(<rect key="c" x={x} y={0} width={cW} height={12} fill="#059669" />); x += cW; }
+                                    if (iW > 0) { parts.push(<rect key="i" x={x} y={0} width={iW} height={12} fill="#DC2626" />); x += iW; }
+                                    if (uW > 0) { parts.push(<rect key="u" x={x} y={0} width={uW} height={12} fill="#9CA3AF" />); }
+                                    return parts;
+                                  })()}
+                                </svg>
+                              </div>
+                              <div className="text-xs text-gray-700 flex items-center gap-3">
+                                {s.pct !== undefined ? <span className="font-semibold">{s.pct}%</span> : null}
+                                {s.duration !== undefined ? <span className="ml-2 text-gray-500">{Math.round(s.duration/1000)}s</span> : null}
+                                <span className="ml-2 text-xs text-gray-600"><span className="font-semibold text-green-600">{recCorrect}</span> ✓</span>
+                                <span className="ml-1 text-xs text-gray-600"><span className="font-semibold text-red-600">{recIncorrect}</span> ✗</span>
+                                <span className="ml-1 text-xs text-gray-600"><span className="font-semibold text-gray-600">{recUnanswered}</span> •</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-500">No answers</div>
+                          )}
                         </div>
                       </div>
+                      {/* inline results only - counts displayed alongside the compact bar above */}
                       { (r.answers || r.summary) ? (
                         <details className="mt-2 text-xs text-gray-700">
                           <summary className="cursor-pointer">View details</summary>

@@ -115,6 +115,7 @@ const Quiz: React.FC = () => {
   const [loadingSet, setLoadingSet] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [finished, setFinished] = useState(false);
+  const [presented, setPresented] = useState<Array<{ text: string; choices: string[]; selectedIndex?: number }>>([]);
 
   const activeStep = steps.find((s) => s.id === active) || steps[0];
   // refs for alignment
@@ -202,7 +203,9 @@ const Quiz: React.FC = () => {
         // { runtimeId, index, question: { id, text, options } }
         setRuntimeId(data.runtimeId || null);
         const q = data.question;
-        setCurrentQuestion({ text: q.text || q.question || 'Untitled', choices: q.options || q.choices || [], answer: undefined });
+        const parsedQ = { text: q.text || q.question || 'Untitled', choices: q.options || q.choices || [], answer: undefined };
+        setCurrentQuestion(parsedQ);
+        setPresented((p) => { const copy = [...p]; copy[0] = { text: parsedQ.text, choices: parsedQ.choices }; return copy; });
       } catch (err) {
         // fallback to previous behaviour
         await fetchQuestion(0, setKey);
@@ -237,6 +240,7 @@ const Quiz: React.FC = () => {
         };
         setCurrentQuestion(parsed);
         setSelected(null);
+        setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
       } else {
         // legacy / non-session fetch
         const res = await fetch(`/api/questions?set=${encodeURIComponent(key)}&index=${index}`);
@@ -258,6 +262,7 @@ const Quiz: React.FC = () => {
           };
           setCurrentQuestion(parsed);
           setSelected(null);
+            setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
       }
     } catch (err: any) {
       // fallback: pick a random question from local set
@@ -331,6 +336,11 @@ const Quiz: React.FC = () => {
       copy[current] = isCorrect ? 1 : 0;
       return copy;
     });
+    setPresented((p) => {
+      const copy = [...p];
+      copy[current] = Object.assign(copy[current] || {}, { selectedIndex: selected });
+      return copy;
+    });
     if (isCorrect) setScore((s) => s + 1);
 
     const next = current + 1;
@@ -353,7 +363,7 @@ const Quiz: React.FC = () => {
     const total = answers.length;
     const percent = Math.round((score / Math.max(1, total)) * 100);
     const summary = { score, total, percent, durationMs, startedAt, finishedAt };
-    const payload = { quizId, answers, summary, quizType: activeStep.key };
+    const payload = { quizId, answers, summary, quizType: activeStep.key, presented };
 
     try {
       const res = await fetch('/api/questions/quiz/finish', {
