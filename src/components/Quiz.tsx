@@ -1,4 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import StepList from './quiz/StepList';
+import QuestionPanel from './quiz/QuestionPanel';
+import FinishedSummary from './quiz/FinishedSummary';
+import ProgressPanel from './quiz/ProgressPanel';
 
 type Question = {
   text: string;
@@ -350,22 +354,16 @@ const Quiz: React.FC = () => {
     <div className="w-full px-6 md:px-10">
       <div className="grid grid-cols-1 md:[grid-template-columns:2fr_8fr_2fr] gap-6">
         {/* Left column - steps list */}
-        <div className="bg-white border rounded-xl overflow-hidden">
-          <ul className="divide-y" ref={leftListRef}>
-            {steps.map((s, i) => (
-              <StepItem
-                key={s.id}
-                step={s}
-                active={s.id === active}
-                ref={(el) => (stepRefs.current[i] = el)}
-                onClick={() => {
-                  setActive(s.id);
-                  reset();
-                }}
-              />
-            ))}
-          </ul>
-        </div>
+        <StepList
+          steps={steps}
+          activeId={active}
+          onStepClick={(id) => {
+            setActive(id);
+            reset();
+          }}
+          leftListRef={leftListRef}
+          setStepRef={(i, el) => (stepRefs.current[i] = el)}
+        />
 
         {/* Center card (details for the active set) */}
         <div ref={centerRef}>
@@ -398,84 +396,26 @@ const Quiz: React.FC = () => {
           </InfoCard>
           {/* Inline quiz UI — appears when started */}
           {started && currentQuestion && (
-            <div className="mt-6 bg-white p-6 rounded shadow w-full">
-              <div className="text-lg font-semibold mb-4">{currentQuestion.text}</div>
-
-              <div className="grid gap-3">
-                {currentQuestion.choices.map((c, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSelect(i)}
-                    className={`text-left px-4 py-3 border rounded hover:bg-gray-100 ${selected === i ? 'bg-indigo-50 border-indigo-400' : ''}`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-4 flex items-center justify-between">
-                <div className="text-sm text-gray-600">Score: {score}</div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSubmitAnswer}
-                    disabled={selected === null || loadingQuestion}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded disabled:opacity-50"
-                  >
-                    {loadingQuestion ? 'Loading…' : (current + 1 >= totalQuestions ? 'Finish' : 'Submit & Next')}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <QuestionPanel
+              question={currentQuestion}
+              selected={selected}
+              onSelect={handleSelect}
+              onSubmit={handleSubmitAnswer}
+              loadingQuestion={loadingQuestion}
+              current={current}
+              total={totalQuestions}
+              score={score}
+            />
           )}
 
               {/* Finished summary view */}
               {finished && (
-                <div className="mt-6 bg-white p-6 rounded shadow w-full">
-                  <h3 className="text-xl font-semibold mb-2">Test Summary</h3>
-                  <p className="mb-4">You scored <span className="font-bold">{score}</span> of <span className="font-bold">{totalQuestions}</span> ({Math.round((score / Math.max(1, totalQuestions)) * 100)}%)</p>
-
-                  <div className="grid gap-2">
-                    {answers.map((a, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2 border rounded">
-                        <div className="text-sm">Question {i + 1}</div>
-                        <div className={a === 1 ? 'text-green-600 font-semibold' : a === 0 ? 'text-red-600 font-semibold' : 'text-gray-600'}>
-                          {a === 1 ? 'Correct' : a === 0 ? 'Wrong' : 'Unanswered'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 flex gap-2">
-                    <button onClick={reset} className="px-4 py-2 border rounded">Retry</button>
-                    <button onClick={() => { reset(); startSet(); }} className="px-4 py-2 bg-indigo-600 text-white rounded">Retake</button>
-                  </div>
-                </div>
+                <FinishedSummary answers={answers} score={score} total={totalQuestions} onRetry={reset} onRetake={() => { reset(); startSet(); }} />
               )}
 
         </div>
 
-        {/* Right column: compact progress summary */}
-        <div>
-          <div className="p-6 rounded-xl bg-white border shadow-sm">
-            <h4 className="text-lg font-semibold mb-3">Progress</h4>
-            <div className="text-sm text-gray-600 mb-2">Question {Math.min(current + 1, totalQuestions)} of {totalQuestions}</div>
-            <div className="text-2xl font-bold text-indigo-600 mb-3">{Math.round((score / Math.max(1, totalQuestions)) * 100)}%</div>
-
-            <div className="w-full h-3 bg-gray-100 rounded overflow-hidden flex mb-3">
-              {Array.from({ length: totalQuestions }).map((_, i) => {
-                const state = answers[i] ?? -1;
-                const width = `${100 / totalQuestions}%`;
-                const cls = state === 1 ? 'bg-green-500' : state === 0 ? 'bg-red-500' : 'bg-gray-300';
-                return <div key={i} className={`${cls} h-3`} style={{ width }} />;
-              })}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-500">Score</div>
-              <div className="text-lg font-semibold">{score}</div>
-            </div>
-          </div>
-        </div>
+        <ProgressPanel answers={answers} current={current} total={totalQuestions} score={score} />
       </div>
 
       
