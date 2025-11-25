@@ -2,7 +2,8 @@ import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { register } from './router';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import { allocSessionId, saveSessionEntry, getSessionEntry, sessionStore as inMemorySessionStore, getQuizRecordsForSession } from './sessionStore';
+import { allocSessionId, saveSessionEntry, getSessionEntry, sessionStore as inMemorySessionStore } from './sessionStore';
+import { getQuizRecordsForSession } from './quizStore';
 
 // DynamoDB setup (optional). Read table name from env `SESSIONS_TABLE` or `SESSIONS_DDB_TABLE`.
 const sessionsTable = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || 'SessionDb';

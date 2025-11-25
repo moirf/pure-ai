@@ -42,8 +42,12 @@ const HomePage: React.FC = () => {
   }, [sessionId]);
 
   function summarize(record: any) {
-    const started = record.startedAt ? Number(record.startedAt) : undefined;
-    const finished = record.finishedAt ? Number(record.finishedAt) : undefined;
+    const started = (record.summary && (record.summary.startedAt ?? record.summary.started))
+      ? Number(record.summary.startedAt ?? record.summary.started)
+      : (record.startedAt ? Number(record.startedAt) : undefined);
+    const finished = (record.summary && (record.summary.finishedAt ?? record.summary.finished))
+      ? Number(record.summary.finishedAt ?? record.summary.finished)
+      : (record.finishedAt ? Number(record.finishedAt) : undefined);
     let total: number | undefined = undefined;
     let correct: number | undefined = undefined;
     if (record.summary && typeof record.summary === 'object') {
@@ -133,10 +137,33 @@ const HomePage: React.FC = () => {
                         </div>
                       </div>
                       {/* inline results only - counts displayed alongside the compact bar above */}
-                      { (r.answers || r.summary) ? (
+                      { (r.answers || r.summary || r.presented) ? (
                         <details className="mt-2 text-xs text-gray-700">
                           <summary className="cursor-pointer">View details</summary>
-                          <pre className="mt-2 overflow-auto bg-gray-50 p-2 rounded text-xs">{JSON.stringify(r, null, 2)}</pre>
+                          <div className="mt-2 space-y-2">
+                            {Array.isArray(r.presented) && r.presented.length > 0 ? (
+                              <div>
+                                <div className="text-sm font-semibold mb-1">Questions presented</div>
+                                <ul className="text-sm list-decimal ml-5 space-y-1">
+                                  {r.presented.map((q: any, qi: number) => {
+                                    const ans = Array.isArray(r.answers) ? r.answers[qi] : undefined;
+                                    let status = 'Unanswered';
+                                    let cls = 'text-gray-600';
+                                    if (ans === 1) { status = 'Correct'; cls = 'text-green-600'; }
+                                    else if (ans === 0) { status = 'Wrong'; cls = 'text-red-600'; }
+                                    return (
+                                      <li key={qi} className="flex items-start justify-between">
+                                        <div className="flex-1 pr-4">{q?.text || q?.question || 'Untitled question'}</div>
+                                        <div className={`ml-2 font-medium ${cls}`}>{status}</div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            ) : (
+                              <pre className="mt-2 overflow-auto bg-gray-50 p-2 rounded text-xs">{JSON.stringify(r, null, 2)}</pre>
+                            )}
+                          </div>
                         </details>
                       ) : null }
                     </li>
