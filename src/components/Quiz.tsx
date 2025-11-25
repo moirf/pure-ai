@@ -175,7 +175,7 @@ const Quiz: React.FC = () => {
       // in this function. Using `newQuizId` guarantees we send the correct id.
       let newQuizId: string | null = quizId;
       try {
-        const createRes = await fetch('/api/questions/quiz', {
+        const createRes = await fetch('/api/quiz', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, metadata: {} })
@@ -193,7 +193,7 @@ const Quiz: React.FC = () => {
 
       // Try to start a server session. If it fails, fall back to local fetch.
       try {
-        const res = await fetch('/api/questions/start', {
+        const res = await fetch('/api/quiz', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ count: totalQuestions, quizId: newQuizId ?? quizId, sessionId })
@@ -279,7 +279,7 @@ const Quiz: React.FC = () => {
             const remaining: any[] = [];
             for (const item of arr) {
               try {
-                const res = await fetch('/api/questions/quiz/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+                const res = await fetch('/api/quiz/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
                 if (!res.ok) throw new Error(`Server returned ${res.status}`);
               } catch (e) {
                 remaining.push(item);
@@ -366,7 +366,7 @@ const Quiz: React.FC = () => {
     const payload = { quizId, answers, summary, quizType: activeStep.key, presented };
 
     try {
-      const res = await fetch('/api/questions/quiz/finish', {
+            const res = await fetch('/api/quiz/finish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -407,7 +407,7 @@ const Quiz: React.FC = () => {
       const remaining: any[] = [];
       for (const item of arr) {
         try {
-          const res = await fetch('/api/questions/quiz/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+          const res = await fetch('/api/quiz/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
           if (!res.ok) throw new Error(`Server returned ${res.status}`);
         } catch (e) {
           remaining.push(item);
