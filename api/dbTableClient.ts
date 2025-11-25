@@ -13,6 +13,7 @@ import {
 	type QueryCommandInput,
 	type ScanCommandInput,
 	type UpdateCommandInput,
+	type UpdateCommandOutput,
 } from '@aws-sdk/lib-dynamodb';
 
 // Centralized DynamoDB document client for API modules to share.
@@ -59,9 +60,9 @@ export class DbTableClient<TItem extends DynamoItem = DynamoItem, TKey extends D
 		update:
 			| Partial<TItem>
 			| Omit<UpdateCommandInput, 'TableName' | 'Key'>
-	) {
+	): Promise<UpdateCommandOutput> {
 		const input = this.buildUpdateInput(key, update);
-		await ddbDocClient.send(new UpdateCommand(input));
+		return ddbDocClient.send(new UpdateCommand(input));
 	}
 
 	async delete(key: TKey, overrides: Omit<DeleteCommandInput, 'TableName' | 'Key'> = {}) {
