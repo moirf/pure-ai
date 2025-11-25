@@ -4,7 +4,7 @@ import { route } from './router';
 // import all route files so they register themselves
 import './projects';
 import './questions';
-import './quiz';
+import './quiz/index';
 import './reviews';
 import './sessions';
 

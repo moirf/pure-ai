@@ -20,7 +20,8 @@
     "jsx": "preserve",
     "types": [
       "node",
-      "react"
+      "react",
+      "jest"
     ],
     "plugins": [
       {
