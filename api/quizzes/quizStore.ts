@@ -1,19 +1,48 @@
-import { PutCommand, GetCommand, UpdateCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import ddbClient, { QUIZ_TABLE } from '../dbTableClient';
+import { createDbTableClient, Tables } from '../dbTableClient';
 
-export async function saveQuizRecord(quizId: string, payload: any) {
-  const item: any = { quizId: String(quizId) };
-  if (payload && payload.sessionId) item.sessionId = String(payload.sessionId);
-  if (payload) Object.assign(item, payload);
-  await ddbClient.send(new PutCommand({ TableName: QUIZ_TABLE, Item: item } as any));
+
+export interface QuizQuestionEntry {
+  sno: number;
+  questionId: string;
+  correct?: boolean | null;
 }
 
-export async function getQuizRecord(quizId: string) {
-  const res = await ddbClient.send(new GetCommand({ TableName: QUIZ_TABLE, Key: { quizId } } as any));
-  return res.Item;
+export interface QuizDbRecord {
+  quizId: string;
+  sessionId?: string;
+  quizType?: string;
+  questions?: QuizQuestionEntry[];
+  answers?: any;
+  result?: any;
+  startedAt?: number;
+  finishedAt?: number;
+  [key: string]: any;
 }
 
-export async function finishQuizRecord(quizId: string, answers?: any, summary?: any) {
+type QuizPrimaryKey = { quizId: string };
+type QuizItem = QuizDbRecord;
+type QuizRecordUpdate = Partial<Omit<QuizDbRecord, 'quizId'>>;
+
+const quizTableClient = createDbTableClient<QuizItem, QuizPrimaryKey>(Tables.QUIZ_TABLE);
+
+export async function saveQuizRecord(quizId: string, payload: QuizRecordUpdate = {}) {
+  const existing = await quizTableClient.get({ quizId }).catch(() => null);
+  const base: QuizDbRecord = existing ? { ...existing } : { quizId: String(quizId) };
+  if (payload.sessionId) base.sessionId = String(payload.sessionId);
+  Object.assign(base, payload);
+  await quizTableClient.put(base);
+}
+
+export async function getQuizRecord(quizId: string): Promise<QuizDbRecord | null> {
+  return quizTableClient.get({ quizId });
+}
+
+export async function finishQuizRecord(
+  quizId: string,
+  answers?: QuizDbRecord['answers'],
+  summary?: QuizDbRecord['summary'],
+  questions?: QuizDbRecord['questions']
+) {
   const now = Date.now();
   const exprNames: Record<string, string> = {};
   const exprValues: Record<string, any> = {};
@@ -28,19 +57,36 @@ export async function finishQuizRecord(quizId: string, answers?: any, summary?: 
     exprValues[':s'] = summary;
     setParts.push('#s = :s');
   }
+  if (questions !== undefined) {
+    exprNames['#q'] = 'questions';
+    exprValues[':q'] = questions;
+    setParts.push('#q = :q');
+  }
   exprNames['#f'] = 'finishedAt';
   exprValues[':f'] = now;
   setParts.push('#f = :f');
   const updateExpr = 'SET ' + setParts.join(', ');
-  await ddbClient.send(new UpdateCommand({ TableName: QUIZ_TABLE, Key: { quizId }, UpdateExpression: updateExpr, ExpressionAttributeNames: exprNames, ExpressionAttributeValues: exprValues } as any));
+  await quizTableClient.update(
+    { quizId },
+    {
+      UpdateExpression: updateExpr,
+      ExpressionAttributeNames: exprNames,
+      ExpressionAttributeValues: exprValues,
+    }
+  );
 }
 
-export async function saveQuizResult(quizId: string, sessionId: string | undefined, quizType?: string, payload?: Record<string, any>) {
-  const item: any = { quizId: String(quizId) };
+export async function saveQuizResult(
+  quizId: string,
+  sessionId: string | undefined,
+  quizType?: string,
+  payload?: QuizRecordUpdate
+) {
+  const item: QuizDbRecord = { quizId: String(quizId) };
   if (sessionId) item.sessionId = String(sessionId);
   if (quizType) item.quizType = quizType;
   if (payload) Object.assign(item, payload);
-  await ddbClient.send(new PutCommand({ TableName: QUIZ_TABLE, Item: item } as any));
+  await quizTableClient.put(item);
 }
 
 export async function saveQuizResultSingleRow(
@@ -49,29 +95,25 @@ export async function saveQuizResultSingleRow(
   quizType?: string,
   answers?: any,
   summary?: any,
-  payload?: Record<string, any>
+  payload?: QuizRecordUpdate
 ) {
-  const item: any = { sessionId: String(sessionId), quizId: String(quizId) };
+  const item: QuizDbRecord = { sessionId: String(sessionId), quizId: String(quizId) };
   if (quizType) item.quizType = quizType;
   if (answers !== undefined) item.answers = answers;
   if (summary !== undefined) item.summary = summary;
   if (payload) Object.assign(item, payload);
-  await ddbClient.send(new PutCommand({ TableName: QUIZ_TABLE, Item: item } as any));
+  await quizTableClient.put(item);
 }
 
-export async function getQuizRecordsForSession(sessionId: string) {
+export async function getQuizRecordsForSession(sessionId: string): Promise<QuizDbRecord[]> {
   try {
-    const res = await ddbClient.send(new QueryCommand({
-      TableName: QUIZ_TABLE,
+    return await quizTableClient.query({
       IndexName: 'sessionId-index',
       KeyConditionExpression: 'sessionId = :sid',
-      ExpressionAttributeValues: { ':sid': sessionId }
-    } as any));
-    const items = res.Items || [];
-    return items;
+      ExpressionAttributeValues: { ':sid': sessionId },
+    });
   } catch (e) {
-    const scanRes = await ddbClient.send(new ScanCommand({ TableName: QUIZ_TABLE } as any));
-    const items = scanRes.Items || [];
+    const items = await quizTableClient.scan();
     return items.filter((it: any) => it.sessionId === sessionId);
   }
 }

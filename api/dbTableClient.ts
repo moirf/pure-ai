@@ -13,6 +13,7 @@ import {
 	type QueryCommandInput,
 	type ScanCommandInput,
 	type UpdateCommandInput,
+	type UpdateCommandOutput,
 } from '@aws-sdk/lib-dynamodb';
 
 // Centralized DynamoDB document client for API modules to share.
@@ -20,18 +21,16 @@ const ddbClient = new DynamoDBClient({});
 export const ddbDocClient = DynamoDBDocumentClient.from(ddbClient);
 
 export const QUIZ_TABLE = process.env.QUIZ_TABLE || 'QuizDb';
-export const SESSIONS_TABLE = process.env.SESSIONS_TABLE || process.env.SESSIONS_DDB_TABLE || 'SessionDb';
+export const SESSIONS_TABLE = process.env.SESSIONS_TABLE || 'SessionDb';
+export const REVIEWS_TABLE = process.env.REVIEWS_TABLE || 'ReviewsDb';
+export const QUESTIONS_TABLE = process.env.QUESTIONS_TABLE || 'QuestionsDb';
 
-// Provide a runtime "enum-like" object so callers can import `Tables` and
-// reference table names in a discoverable, type-safe manner. This keeps
-// compatibility with existing named exports while offering an enum-style API.
 export const Tables = {
 	QUIZ_TABLE,
 	SESSIONS_TABLE,
+    REVIEWS_TABLE,
+    QUESTIONS_TABLE
 } as const;
-
-export type TableKey = keyof typeof Tables;
-export type TableName = typeof Tables[TableKey];
 
 export type DynamoKey = Record<string, any>;
 export type DynamoItem = Record<string, any>;
@@ -59,9 +58,9 @@ export class DbTableClient<TItem extends DynamoItem = DynamoItem, TKey extends D
 		update:
 			| Partial<TItem>
 			| Omit<UpdateCommandInput, 'TableName' | 'Key'>
-	) {
+	): Promise<UpdateCommandOutput> {
 		const input = this.buildUpdateInput(key, update);
-		await ddbDocClient.send(new UpdateCommand(input));
+		return ddbDocClient.send(new UpdateCommand(input));
 	}
 
 	async delete(key: TKey, overrides: Omit<DeleteCommandInput, 'TableName' | 'Key'> = {}) {

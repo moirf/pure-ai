@@ -3,6 +3,7 @@ import { register } from '../router';
 
 import { sessionStore as inMemorySessionStore, Session as SessionType } from './sessionStore';
 import * as quizStore from './quizStore';
+import type { QuizDbRecord, QuizQuestionEntry } from './quizStore';
 import ddbClient, { QUIZ_TABLE } from '../dbTableClient';
 import { ScanCommand, GetCommand, BatchWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { allocCounter, formatQuizId, allocSessionId, formatSessionId, saveSessionEntry, getSessionEntry } from './sessionStore';
@@ -292,7 +293,8 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
     }
 
     const pool = selected;
-    const ids = pool.map((q) => q.id);
+    const ids = pool.map((q) => q.id ?? (q as any)?.sk ?? (q as any)?.pk);
+    const questionStatus = ids.map((questionId, idx) => ({ sno: idx + 1, questionId, correct: null }));
     const optionOrders = pool.map((q) => shuffle(q.options.map((_, i) => i)));
     // Create a short-lived runtime id (ephemeral) and store the runtime session in-memory
     const runtimeId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -302,17 +304,22 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
     // If a persistent quizId was provided, attach the runtime session's sessionId to it
     // Persist mapping quizId -> sessionId if a persistent sessionId is provided
     if (quizId) {
+      const quizSnapshot = {
+        allocation: sess.allocation || allocation || {},
+        questionIds: ids,
+        totalQuestions: ids.length,
+        questions: questionStatus,
+      };
       try {
         if (sessionId) {
-          await quizStore.saveQuizRecord(quizId, { sessionId: sessionId, allocation: sess.allocation || {} });
+          await quizStore.saveQuizRecord(quizId, { sessionId: sessionId, ...quizSnapshot });
         } else {
           // If no sessionId provided in body, attempt to preserve any existing sessionId on quiz record
           const existing = await quizStore.getQuizRecord(quizId).catch(() => null);
           if (existing && existing.sessionId) {
             // nothing to do; mapping already exists
           } else {
-            // persist without sessionId for now; callers should pass sessionId when available
-            await quizStore.saveQuizRecord(quizId, { allocation: sess.allocation || {} });
+            await quizStore.saveQuizRecord(quizId, quizSnapshot);
           }
         }
       } catch (e) {
@@ -448,6 +455,26 @@ export const getQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProxyRe
   }
 };
 
+function buildQuestionResults(quiz: QuizDbRecord | null, answers?: any): QuizQuestionEntry[] | undefined {
+  let base: QuizQuestionEntry[] | undefined;
+  if (Array.isArray(quiz?.questions) && quiz.questions.length) {
+    base = quiz.questions.map((q) => ({ ...q }));
+  } else if (quiz && Array.isArray((quiz as any).questionIds)) {
+    const ids = (quiz as any).questionIds as string[];
+    base = ids.map((questionId, idx) => ({ sno: idx + 1, questionId }));
+  }
+  if (!base) return undefined;
+  if (Array.isArray(answers)) {
+    for (let i = 0; i < base.length; i++) {
+      const val = answers[i];
+      if (val === 1) base[i].correct = true;
+      else if (val === 0) base[i].correct = false;
+      else base[i].correct = null;
+    }
+  }
+  return base;
+}
+
 export const finishQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
@@ -459,13 +486,21 @@ export const finishQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProx
     // legacy two-step approach (update quiz record + write result row).
     try {
       const quiz = await quizStore.getQuizRecord(quizId);
+      const questionResults = buildQuestionResults(quiz, answers);
       const sessionId = quiz && quiz.sessionId ? String(quiz.sessionId) : undefined;
       if (sessionId) {
         try {
-          await quizStore.saveQuizResultSingleRow(quizId, sessionId, quizType, answers, summary, undefined);
+          await quizStore.saveQuizResultSingleRow(
+            quizId,
+            sessionId,
+            quizType,
+            answers,
+            summary,
+            questionResults ? { questions: questionResults } : undefined
+          );
         } catch (err) {
           // fallback
-          await quizStore.finishQuizRecord(quizId, answers, summary);
+          await quizStore.finishQuizRecord(quizId, answers, summary, questionResults);
           try {
             let total = 0;
             let correctCount = 0;
@@ -479,6 +514,7 @@ export const finishQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProx
             }
             const payload: any = { total, correct: correctCount, incorrect: incorrectCount, finishedAt: Date.now() };
             if (summary !== undefined) payload.summary = summary;
+            if (questionResults) payload.questions = questionResults;
             await quizStore.saveQuizResult(quizId, sessionId, quizType, payload);
           } catch (e) {
             console.warn('Failed to save minimal quiz result after fallback', quizId, String(e));
@@ -486,7 +522,7 @@ export const finishQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProx
         }
       } else {
         // No sessionId available: fall back to updating the quiz record only
-        await quizStore.finishQuizRecord(quizId, answers, summary);
+        await quizStore.finishQuizRecord(quizId, answers, summary, questionResults);
       }
     } catch (err) {
       console.warn('Failed to finalize quiz result', quizId, String(err));

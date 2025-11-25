@@ -174,11 +174,12 @@ const Quiz: React.FC = () => {
       // React state updates are async — the `quizId` state will still be stale
       // in this function. Using `newQuizId` guarantees we send the correct id.
       let newQuizId: string | null = quizId;
+      const allocation = { [activeStep.key]: totalQuestions } as Record<string, number>;
       try {
-        const createRes = await fetch('/api/quiz', {
+        const createRes = await fetch('/api/quizzes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, metadata: {} })
+          body: JSON.stringify({ sessionId, metadata: { stepKey: activeStep.key, totalQuestions, allocation } })
         });
         if (createRes.ok) {
           const createJson = await createRes.json();
@@ -193,10 +194,10 @@ const Quiz: React.FC = () => {
 
       // Try to start a server session. If it fails, fall back to local fetch.
       try {
-        const res = await fetch('/api/quiz', {
+        const res = await fetch('/api/questions/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count: totalQuestions, quizId: newQuizId ?? quizId, sessionId })
+          body: JSON.stringify({ count: totalQuestions, quizId: newQuizId ?? quizId, sessionId, allocation })
         });
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
@@ -279,7 +280,9 @@ const Quiz: React.FC = () => {
             const remaining: any[] = [];
             for (const item of arr) {
               try {
-                const res = await fetch('/api/quiz/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+                if (!item?.quizId) throw new Error('quizId missing on pending payload');
+                const finishUrl = `/api/quizzes/${encodeURIComponent(item.quizId)}/finish`;
+                const res = await fetch(finishUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
                 if (!res.ok) throw new Error(`Server returned ${res.status}`);
               } catch (e) {
                 remaining.push(item);
@@ -366,7 +369,8 @@ const Quiz: React.FC = () => {
     const payload = { quizId, answers, summary, quizType: activeStep.key, presented };
 
     try {
-            const res = await fetch('/api/quiz/finish', {
+      const finishUrl = `/api/quizzes/${encodeURIComponent(quizId)}/finish`;
+      const res = await fetch(finishUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -407,7 +411,9 @@ const Quiz: React.FC = () => {
       const remaining: any[] = [];
       for (const item of arr) {
         try {
-          const res = await fetch('/api/quiz/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
+          if (!item?.quizId) throw new Error('quizId missing on pending payload');
+          const finishUrl = `/api/quizzes/${encodeURIComponent(item.quizId)}/finish`;
+          const res = await fetch(finishUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
           if (!res.ok) throw new Error(`Server returned ${res.status}`);
         } catch (e) {
           remaining.push(item);

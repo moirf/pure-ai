@@ -1,7 +1,7 @@
 import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda';
 import fs from 'fs';
 import path from 'path';
-import { register } from './router';
+import { register } from '../router';
 
 async function loadProjects() {
   const dataPath = path.join(process.cwd(), 'public', 'projects', 'projects.json');
