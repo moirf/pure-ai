@@ -14,7 +14,7 @@ jest.mock('../../api/quizStore', () => {
   };
 });
 
-jest.mock('../../api/dbClient', () => ({
+jest.mock('../../api/dbTableClient', () => ({
   __esModule: true,
   default: null,
   QUIZ_TABLE: null,

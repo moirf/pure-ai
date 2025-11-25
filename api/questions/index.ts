@@ -1,11 +1,11 @@
 import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { register } from '../router';
-import { sessionStore as inMemorySessionStore } from '../sessionStore';
-import * as quizStore from '../quizStore';
-import ddbClient from '../dbClient';
+import { sessionStore as inMemorySessionStore } from '../quizzes/sessionStore';
+import * as quizStore from '../quizzes/quizStore';
+import ddbClient from '../dbTableClient';
 import { ScanCommand, GetCommand, BatchWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
-import questions from '../questionsData';
+import questions from './questionsData';
 
 type Question = any;
 

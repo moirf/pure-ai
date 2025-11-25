@@ -1,5 +1,5 @@
 import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { register } from './router';
+import { register } from '../router';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { allocSessionId, saveSessionEntry, getSessionEntry, sessionStore as inMemorySessionStore } from './sessionStore';

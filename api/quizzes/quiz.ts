@@ -1,9 +1,9 @@
 import { APIGatewayEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { register } from './router';
+import { register } from '../router';
 
 import { sessionStore as inMemorySessionStore, Session as SessionType } from './sessionStore';
 import * as quizStore from './quizStore';
-import ddbClient, { QUIZ_TABLE } from './dbClient';
+import ddbClient, { QUIZ_TABLE } from '../dbTableClient';
 import { ScanCommand, GetCommand, BatchWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { allocCounter, formatQuizId, allocSessionId, formatSessionId, saveSessionEntry, getSessionEntry } from './sessionStore';
 
@@ -24,7 +24,7 @@ interface Question {
 }
 
 // Expanded sample question bank
-import questions from './questionsData';
+import questions from '../questions/questionsData';
 
 // Ensure each local question has `pk` and `sk` fields (normalize Category -> pk, id -> sk)
 const normalizedQuestions: Question[] = questions.map((q) => {

@@ -1,5 +1,5 @@
 import { PutCommand, GetCommand, UpdateCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import ddbClient, { QUIZ_TABLE } from './dbClient';
+import ddbClient, { QUIZ_TABLE } from '../dbTableClient';
 
 export async function saveQuizRecord(quizId: string, payload: any) {
   const item: any = { quizId: String(quizId) };
