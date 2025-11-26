@@ -11,6 +11,7 @@ import {
   resolveSessionRuntimeId,
 } from './sessionStore';
 import * as quizStore from './quizStore';
+import type { QuizDbRecord, QuizQuestionEntry } from './quizStore';
 
 const sessionTableClient = createDbTableClient<Record<string, any>, { sessionId: string }>(Tables.SESSIONS_TABLE);
 
@@ -26,6 +27,113 @@ function shuffleArray<T>(arr: T[]) {
 function buildClientQuestion(question: QuestionRecord, optionOrder: number[]) {
   const options = optionOrder.map((idx) => question.options[idx]);
   return { id: question.id, text: question.text, options };
+}
+
+export interface PreparedQuestionSet {
+  selected: QuestionRecord[];
+  ids: string[];
+  questionStatus: QuizQuestionEntry[];
+}
+
+function questionIdentifier(question: QuestionRecord): string {
+  return String(question.id ?? question.sk ?? question.pk);
+}
+
+function selectQuestionsByAllocation(all: QuestionRecord[], total: number, allocation?: Record<string, number>) {
+  if (allocation && Object.keys(allocation).length > 0) {
+    const byPk = new Map<string, QuestionRecord[]>();
+    for (const q of all) {
+      const key = q.pk ?? 'Unknown';
+      if (!byPk.has(key)) byPk.set(key, []);
+      byPk.get(key)!.push(q);
+    }
+
+    const vals = Object.values(allocation);
+    const sumVals = vals.reduce((s, v) => s + Number(v), 0);
+    const isPercent = sumVals <= 100;
+    const pkCounts: Record<string, number> = {};
+    if (isPercent) {
+      for (const [pk, pct] of Object.entries(allocation)) {
+        pkCounts[pk] = Math.floor((Number(pct) / 100) * total);
+      }
+      let assigned = Object.values(pkCounts).reduce((s, v) => s + v, 0);
+      const remaining = total - assigned;
+      if (remaining > 0) {
+        const pks = Object.keys(allocation);
+        for (let i = 0; i < remaining; i++) {
+          const pick = pks[i % pks.length];
+          pkCounts[pick] = (pkCounts[pick] || 0) + 1;
+        }
+      }
+    } else {
+      for (const [pk, v] of Object.entries(allocation)) pkCounts[pk] = Math.max(0, Math.floor(Number(v)));
+    }
+
+    const selected: QuestionRecord[] = [];
+    for (const [pk, cnt] of Object.entries(pkCounts)) {
+      const poolForPk = byPk.get(pk) || [];
+      const pick = shuffleArray(poolForPk).slice(0, Math.min(cnt, poolForPk.length));
+      selected.push(...pick);
+    }
+
+    if (selected.length < total) {
+      const selectedIds = new Set(selected.map((q) => questionIdentifier(q)));
+      const remainingPool = all.filter((q) => !selectedIds.has(questionIdentifier(q)));
+      selected.push(...shuffleArray(remainingPool).slice(0, total - selected.length));
+    }
+    return shuffleArray(selected).slice(0, Math.min(total, selected.length));
+  }
+
+  return shuffleArray(all).slice(0, Math.min(total, all.length));
+}
+
+export async function prepareQuestionSet(params: {
+  count: number;
+  allocation?: Record<string, number>;
+  questionIds?: string[];
+  questionStatus?: QuizQuestionEntry[] | null;
+}): Promise<PreparedQuestionSet> {
+  const { count, allocation, questionIds, questionStatus } = params;
+  const all = await loadQuestions();
+  const target = Math.max(1, Math.min(Number(count) || all.length, all.length));
+
+  let selected: QuestionRecord[] | null = null;
+  if (questionIds && questionIds.length) {
+    const byId = new Map<string, QuestionRecord>();
+    for (const q of all) byId.set(questionIdentifier(q), q);
+    const mapped = questionIds
+      .map((id) => byId.get(String(id)))
+      .filter((q): q is QuestionRecord => Boolean(q));
+    if (mapped.length === questionIds.length) {
+      selected = mapped.slice(0, Math.min(mapped.length, target));
+    } else {
+      console.warn('prepareQuestionSet: stored question ids missing, regenerating allocation');
+    }
+  }
+
+  if (!selected) {
+    selected = selectQuestionsByAllocation(all, target, allocation);
+  }
+
+  const ids = selected.map(questionIdentifier);
+  const statusMap = new Map<string, QuizQuestionEntry>();
+  if (Array.isArray(questionStatus)) {
+    for (const entry of questionStatus) {
+      if (!entry || entry.questionId === undefined) continue;
+      statusMap.set(String(entry.questionId), entry);
+    }
+  }
+
+  const normalizedStatus = ids.map((questionId, idx) => {
+    const existing = statusMap.get(questionId);
+    return {
+      sno: idx + 1,
+      questionId,
+      correct: existing ? existing.correct ?? null : null,
+    };
+  });
+
+  return { selected, ids, questionStatus: normalizedStatus };
 }
 
 export const allocateSession = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
@@ -89,68 +197,27 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
   try {
     const body = event.body ? JSON.parse(event.body) : {};
     const { count = 15, allocation, quizId, sessionId } = body as { count?: number; allocation?: Record<string, number>; quizId?: string; sessionId?: string };
-    const all = await loadQuestions();
-
-    let selected: QuestionRecord[] = [];
-    if (allocation && Object.keys(allocation).length > 0) {
-      const byPk = new Map<string, QuestionRecord[]>();
-      for (const q of all) {
-        const key = q.pk ?? 'Unknown';
-        if (!byPk.has(key)) byPk.set(key, []);
-        byPk.get(key)!.push(q);
+    let existingQuiz: QuizDbRecord | null = null;
+    if (quizId) {
+      try {
+        existingQuiz = await quizStore.getQuizRecord(quizId);
+      } catch (lookupErr) {
+        console.warn('startSession: failed to load quiz record', quizId, lookupErr);
       }
-
-      const total = Number(count) || 15;
-      const vals = Object.values(allocation);
-      const sumVals = vals.reduce((s, v) => s + Number(v), 0);
-      const isPercent = sumVals <= 100;
-      const pkCounts: Record<string, number> = {};
-      if (isPercent) {
-        for (const [pk, pct] of Object.entries(allocation)) {
-          pkCounts[pk] = Math.floor((Number(pct) / 100) * total);
-        }
-        let assigned = Object.values(pkCounts).reduce((s, v) => s + v, 0);
-        const remaining = total - assigned;
-        if (remaining > 0) {
-          const pks = Object.keys(allocation);
-          for (let i = 0; i < remaining; i++) {
-            const pick = pks[i % pks.length];
-            pkCounts[pick] = (pkCounts[pick] || 0) + 1;
-          }
-        }
-      } else {
-        for (const [pk, v] of Object.entries(allocation)) pkCounts[pk] = Math.max(0, Math.floor(Number(v)));
-      }
-
-      for (const [pk, cnt] of Object.entries(pkCounts)) {
-        const poolForPk = byPk.get(pk) || [];
-        const pick = shuffleArray(poolForPk).slice(0, Math.min(cnt, poolForPk.length));
-        selected.push(...pick);
-      }
-
-      if (selected.length < total) {
-        const remainingPool = all.filter((q) => !selected.some((s) => s.id === q.id));
-        selected.push(...shuffleArray(remainingPool).slice(0, total - selected.length));
-      }
-      selected = shuffleArray(selected).slice(0, Math.min(total, selected.length));
-    } else {
-      selected = shuffleArray(all).slice(0, Math.min(count, all.length));
     }
 
-    const ids = selected.map((q) => q.id ?? q.sk ?? q.pk);
-    const allocatedQuestions = selected.map((q, idx) => ({
-      id: ids[idx],
-      pk: q.pk ?? null,
-      sk: q.sk ?? null,
-      text: q.text,
-      options: q.options,
-      answerIndex: q.answerIndex,
-    }));
-    const questionStatus = ids.map((questionId, idx) => ({
-      sno: idx + 1,
-      questionId,
-      correct: null,
-    }));
+    const storedQuestionIds = existingQuiz?.questions?.map((q) => q.questionId).filter(Boolean) as string[] | undefined;
+    const targetCount = Number(count) || existingQuiz?.totalQuestions || 15;
+    const setResult = await prepareQuestionSet({
+      count: targetCount,
+      allocation,
+      questionIds: storedQuestionIds,
+      questionStatus: existingQuiz?.questions ?? null,
+    });
+    const { selected, ids, questionStatus } = setResult;
+    if (!selected.length) {
+      return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to allocate questions for session' }) };
+    }
     const optionOrders = selected.map((q) => shuffleArray(q.options.map((_, i) => i)));
     const runtimeId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const sess: any = { id: runtimeId, ids, optionOrders, answers: new Array(ids.length).fill(-1), allocation };
@@ -161,7 +228,6 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
       const quizSnapshot = {
         allocation: sess.allocation || allocation || {},
         questionIds: ids,
-        allocatedQuestions,
         totalQuestions: ids.length,
         questions: questionStatus,
       };

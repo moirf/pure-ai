@@ -41,8 +41,9 @@ jest.mock('../../api/dbTableClient', () => {
 // Mock sessionStore so allocCounter doesn't try to use DynamoDB
 jest.mock('../../api/quizzes/sessionStore', () => {
   const aliasMap = new Map<string, string>();
+  let counter = 1000;
   return {
-    allocCounter: jest.fn(async (_name?: string) => 1234),
+    allocCounter: jest.fn(async (_name?: string) => ++counter),
     formatQuizId: jest.fn((n: number) => `QZ-${String(n)}`),
     allocSessionId: jest.fn(async () => 'FL-1234'),
     formatSessionId: jest.fn((n: number) => `FL-${String(n)}`),
@@ -71,17 +72,21 @@ function makeEvent(method: string, path: string, body?: any, qs?: Record<string,
 describe('Quiz lifecycle (mocked stores)', () => {
   test('create -> start -> get question -> answer -> finish', async () => {
     // 1) create quiz with sessionId
-    const createEv = makeEvent('POST', '/api/quizzes', { sessionId: 'S-ABC' });
+    const createPayload = { sessionId: 'S-ABC', metadata: { totalQuestions: 1 } };
+    const createEv = makeEvent('POST', '/api/quizzes', createPayload);
     const createRes = await route(createEv);
     expect(createRes.statusCode).toBe(200);
-    const { quizId } = JSON.parse(createRes.body as string);
+    const parsedCreate = JSON.parse(createRes.body as string);
+    const { quizId, questionSet } = parsedCreate;
     expect(typeof quizId).toBe('string');
+    expect(Array.isArray(questionSet)).toBe(true);
+    expect(questionSet).toHaveLength(1);
 
-    // calling create again with the same session should reuse the quizId
-    const createResSecond = await route(makeEvent('POST', '/api/quizzes', { sessionId: 'S-ABC' }));
+    // calling create again with the same session now issues a fresh quizId
+    const createResSecond = await route(makeEvent('POST', '/api/quizzes', createPayload));
     expect(createResSecond.statusCode).toBe(200);
     const parsedSecond = JSON.parse(createResSecond.body as string);
-    expect(parsedSecond.quizId).toBe(quizId);
+    expect(parsedSecond.quizId).not.toBe(quizId);
 
     // 2) start a session (POST /api/questions/start) - server expects quizId + sessionId
     const startEv = makeEvent('POST', '/api/questions/start', { count: 1, quizId, sessionId: 'S-ABC' });

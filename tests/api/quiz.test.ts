@@ -10,8 +10,9 @@ jest.mock('../../api/quizzes/quizStore', () => {
 });
 
 jest.mock('../../api/quizzes/sessionStore', () => {
+  let counter = 2000;
   return {
-    allocCounter: jest.fn(async () => 1234),
+    allocCounter: jest.fn(async () => ++counter),
     formatQuizId: jest.fn((n: number) => `QZ-${String(n)}`),
     sessionStore: new Map<string, any>(),
     registerSessionAlias: jest.fn(),
@@ -59,6 +60,16 @@ describe('Quiz API basic routes', () => {
     expect(res.statusCode).toBe(400);
     const body = JSON.parse(res.body as string);
     expect(body.error).toBeDefined();
+  });
+
+  test('POST /api/quizzes returns quizId and questionSet', async () => {
+    const ev = makeEvent('POST', '/api/quizzes', { sessionId: 'S-100', metadata: { totalQuestions: 2 } });
+    const res = await route(ev);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body as string);
+    expect(typeof body.quizId).toBe('string');
+    expect(Array.isArray(body.questionSet)).toBe(true);
+    expect(body.questionSet.length).toBeGreaterThan(0);
   });
 
   test('GET /api/quizzes/:quizId returns 404 when quiz not found', async () => {

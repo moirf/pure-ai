@@ -183,11 +183,34 @@ export const deleteQuestion = async (event: APIGatewayEvent): Promise<APIGateway
 	}
 };
 
+export const validateQuestion = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
+	try {
+		const id = event.pathParameters?.id;
+    // get the answerIndex from body and match against stored question
+   if (!id) {
+			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'id required' }) };
+		}
+		const question = await findQuestionById(id);
+		if (!question) {
+			return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Question not found' }) };
+		}
+    const payload = parseBody(event);
+    const answerIndex = typeof payload.answerIndex === 'number' ? payload.answerIndex : null;
+    if (answerIndex === question.answerIndex) {
+      return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, correct: true, explanation: question.explanation || null }) };
+    } else {
+      return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, correct: false, explanation: question.explanation || null }) };
+    }
+	} catch (err: any) {
+		return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
+	}
+};
+
 register('GET', '/api/questions', listQuestions);
 register('GET', '/api/questions/:id', getQuestion);
+register('POST', '/api/questions/:id/validate', validateQuestion);
 register('POST', '/api/questions', addQuestion);
 register('PUT', '/api/questions/:id', updateQuestion);
-register('DELETE', '/api/questions/:id', deleteQuestion);
 register('POST', '/api/questions/seed', seedQuestions);
 
 export default {};

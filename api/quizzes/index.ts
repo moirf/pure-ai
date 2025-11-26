@@ -3,7 +3,8 @@ import { register } from '../../api/router';
 import * as quizStore from './quizStore';
 import type { QuizDbRecord, QuizQuestionEntry } from './quizStore';
 import { allocCounter, formatQuizId } from './sessionStore';
-import { getSessionQuestion } from './sessions';
+import { prepareQuestionSet, getSessionQuestion } from './sessions';
+import type { PreparedQuestionSet } from './sessions';
 
 function getHeader(headers: Record<string, string | undefined> | null | undefined, name: string) {
   if (!headers) return undefined;
@@ -37,25 +38,46 @@ function buildQuestionResults(quiz: QuizDbRecord | null, answers?: any): QuizQue
 export const createQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
-    const { sessionId, metadata } = body as { sessionId?: string; metadata?: Record<string, any> };
+    const { sessionId, metadata } = body as { sessionId?: string; metadata?: Record<string, any>; count?: number; allocation?: Record<string, number> };
     if (!sessionId) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'sessionId required' }) };
-
-    try {
-      const existing = await quizStore.getQuizRecordsForSession(sessionId);
-      const activeQuiz = existing.find((item) => item && item.quizId);
-      if (activeQuiz?.quizId) {
-        return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizId: activeQuiz.quizId, ok: true, reused: true }) };
-      }
-    } catch (lookupErr) {
-      console.warn('Failed to lookup existing quiz for session', sessionId, lookupErr);
-    }
 
     const n = await allocCounter('ATTEMPT');
     const quizId = formatQuizId(n);
     const startedAt = Date.now();
-    const payload = { sessionId: sessionId, allocation: {}, startedAt, metadata };
+    const bodyAllocation = body?.allocation && typeof body.allocation === 'object' ? body.allocation : undefined;
+    const metadataAllocation = metadata && typeof metadata.allocation === 'object' ? metadata.allocation : undefined;
+    const allocation = bodyAllocation || metadataAllocation;
+    const countFromBody = typeof (body as any).count === 'number' ? (body as any).count : undefined;
+    const countFromMetadata = typeof metadata?.totalQuestions === 'number' ? metadata.totalQuestions : undefined;
+
+    let preparedSet: PreparedQuestionSet | null = null;
+    try {
+      preparedSet = await prepareQuestionSet({
+        count: countFromBody ?? countFromMetadata ?? 15,
+        allocation,
+      });
+    } catch (setErr) {
+      console.warn('createQuiz: failed to prepare question set', quizId, setErr);
+    }
+
+    const payload: Record<string, any> = {
+      sessionId: sessionId,
+      allocation: allocation || {},
+      startedAt,
+      metadata,
+    };
+    if (preparedSet) {
+      payload.questionIds = preparedSet.ids;
+      payload.totalQuestions = preparedSet.ids.length;
+      payload.questions = preparedSet.questionStatus;
+    }
+
     await quizStore.saveQuizRecord(quizId, payload);
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quizId, ok: true }) };
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quizId, ok: true, questionSet: preparedSet ? preparedSet.questionStatus : null }),
+    };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
   }
@@ -89,7 +111,9 @@ export const getQuizById = async (event: APIGatewayEvent): Promise<APIGatewayPro
     if (!item) {
       return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Quiz not found' }) };
     }
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) };
+    const sanitized = { ...item } as Record<string, any>;
+    if ('allocatedQuestions' in sanitized) delete sanitized.allocatedQuestions;
+    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sanitized) };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
   }

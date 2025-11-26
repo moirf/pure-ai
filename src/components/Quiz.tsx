@@ -11,6 +11,12 @@ type Question = {
   answer?: number;
 };
 
+type QuestionSet = {
+  sno: number;
+  questionId: string;
+  correct?: boolean | null;
+};
+
 const steps = [
   { id: 1, title: 'CTET 2025', icon: '👑', key: 'ctet25' },
   { id: 2, title: 'CTET 2024', icon: '👑', key: 'ctet24' },
@@ -103,6 +109,7 @@ const Quiz: React.FC = () => {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   // We'll fetch one question at a time from the API.
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [questionSet, setQuestionSet] = useState<QuestionSet[] | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [quizId, setQuizId] = useState<string | null>(null);
   const [runtimeId, setRuntimeId] = useState<string | null>(null);
@@ -162,6 +169,7 @@ const Quiz: React.FC = () => {
       setStarted(true);
       setStartedAt(Date.now());
       setPresented([]);
+      setQuestionSet(null);
       if (!sessionId) {
         setError('A sessionId is required. Please set a Session ID in the header before starting.');
         setStarted(false);
@@ -169,12 +177,8 @@ const Quiz: React.FC = () => {
         return;
       }
 
-      // Create a persistent quizId linked to this session on the server
-      // create a quiz on the server and capture the returned id in a local
-      // variable. We cannot rely on `setQuizId` then reading `quizId` because
-      // React state updates are async — the `quizId` state will still be stale
-      // in this function. Using `newQuizId` guarantees we send the correct id.
       let newQuizId: string | null = quizId;
+      let initialQuestionSet: QuestionSet[] | null = null;
       const allocation = { [activeStep.key]: totalQuestions } as Record<string, number>;
       try {
         const createRes = await fetch('/api/quizzes', {
@@ -186,6 +190,10 @@ const Quiz: React.FC = () => {
           const createJson = await createRes.json();
           newQuizId = createJson.quizId ?? null;
           setQuizId(newQuizId);
+          if (Array.isArray(createJson.questionSet)) {
+            initialQuestionSet = createJson.questionSet as QuestionSet[];
+            setQuestionSet(initialQuestionSet);
+          }
         } else {
           console.warn('Failed to create quiz on server', createRes.status);
         }
@@ -204,7 +212,9 @@ const Quiz: React.FC = () => {
         const data = await res.json();
         const runtimeToken = data.runtimeId || null;
         setRuntimeId(runtimeToken);
-        await fetchQuestion(0, setKey, { runtimeId: runtimeToken, quizId: newQuizId ?? quizId });
+        let hydratedSet = initialQuestionSet;
+        if (!hydratedSet) hydratedSet = await refreshQuestionSet(newQuizId ?? quizId);
+        await fetchQuestion(0, setKey, { runtimeId: runtimeToken, quizId: newQuizId ?? quizId, questionSet: hydratedSet ?? undefined });
       } catch (err) {
         // fallback to previous behaviour
         await fetchQuestion(0, setKey);
@@ -218,13 +228,32 @@ const Quiz: React.FC = () => {
     }
   };
 
-  async function fetchQuestion(index: number, setKey?: string, overrides?: { runtimeId?: string | null; quizId?: string | null }) {
+  async function fetchQuestion(index: number, setKey?: string, overrides?: { runtimeId?: string | null; quizId?: string | null; questionSet?: QuestionSet[] | null }) {
     setLoadingQuestion(true);
     setError(null);
     try {
       const key = setKey ?? activeStep.key;
       const runtimeToken = overrides?.runtimeId ?? runtimeId;
       const quizToken = overrides?.quizId ?? quizId;
+      const orderedSet = overrides?.questionSet ?? questionSet;
+
+      const questionFromSet = orderedSet?.[index];
+      if (questionFromSet?.questionId) {
+        const questionRes = await fetch(`/api/questions/${encodeURIComponent(questionFromSet.questionId)}`);
+        if (questionRes.ok) {
+          const payload = await questionRes.json();
+          const parsed: Question = {
+            text: payload.text || payload.question || 'Untitled',
+            choices: Array.isArray(payload.options) ? payload.options : payload.choices || [],
+            answer: undefined,
+          };
+          setCurrentQuestion(parsed);
+          setSelected(null);
+          setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
+          if (!questionSet && orderedSet) setQuestionSet(orderedSet);
+          return;
+        }
+      }
 
       if (quizToken && runtimeToken) {
         const res = await fetch(`/api/quizzes/${encodeURIComponent(quizToken)}?index=${index}`, {
@@ -419,7 +448,25 @@ const Quiz: React.FC = () => {
     setSelected(null);
     setFinished(false);
     setQuizId(null);
+    setQuestionSet(null);
   };
+
+  async function refreshQuestionSet(currentQuizId: string | null) {
+    if (!currentQuizId) return null;
+    try {
+      const res = await fetch(`/api/quizzes/${encodeURIComponent(currentQuizId)}`);
+      if (!res.ok) return null;
+      const quizData = await res.json();
+      if (Array.isArray(quizData.questions)) {
+        setQuestionSet(quizData.questions);
+        return quizData.questions as QuestionSet[];
+      }
+      return null;
+    } catch (err) {
+      console.warn('Failed to load question set for quiz', currentQuizId, err);
+      return null;
+    }
+  }
 
   // Flush any pending quiz results stored in localStorage. Called on mount.
   async function flushPendingResults() {
