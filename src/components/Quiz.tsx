@@ -5,6 +5,7 @@ import FinishedSummary from './quiz/FinishedSummary';
 import ProgressPanel from './quiz/ProgressPanel';
 
 type Question = {
+  id?: string;
   text: string;
   choices: string[];
   // `answer` is optional because server does not send the correct answer to the client
@@ -109,6 +110,8 @@ const Quiz: React.FC = () => {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   // We'll fetch one question at a time from the API.
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
+  const [currentOptionOrder, setCurrentOptionOrder] = useState<number[] | null>(null);
   const [questionSet, setQuestionSet] = useState<QuestionSet[] | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [quizId, setQuizId] = useState<string | null>(null);
@@ -231,6 +234,8 @@ const Quiz: React.FC = () => {
   async function fetchQuestion(index: number, setKey?: string, overrides?: { runtimeId?: string | null; quizId?: string | null; questionSet?: QuestionSet[] | null }) {
     setLoadingQuestion(true);
     setError(null);
+    setCurrentQuestionId(null);
+    setCurrentOptionOrder(null);
     try {
       const key = setKey ?? activeStep.key;
       const runtimeToken = overrides?.runtimeId ?? runtimeId;
@@ -243,10 +248,13 @@ const Quiz: React.FC = () => {
         if (questionRes.ok) {
           const payload = await questionRes.json();
           const parsed: Question = {
+            id: payload.id || payload.sk || questionFromSet.questionId,
             text: payload.text || payload.question || 'Untitled',
             choices: Array.isArray(payload.options) ? payload.options : payload.choices || [],
             answer: undefined,
           };
+          setCurrentQuestionId(parsed.id ?? null);
+          setCurrentOptionOrder(parsed.choices.map((_, idx) => idx));
           setCurrentQuestion(parsed);
           setSelected(null);
           setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
@@ -264,10 +272,14 @@ const Quiz: React.FC = () => {
         const q = data.question || data;
         if (!q) throw new Error('No question returned from quiz');
         const parsed: Question = {
+          id: q.id,
           text: q.text || q.question || 'Untitled',
           choices: Array.isArray(q.options) ? q.options : q.choices || [],
           answer: undefined,
         };
+        const optionOrder = Array.isArray(q.optionOrder) ? q.optionOrder.map((value: number) => Number(value)) : parsed.choices.map((_, idx) => idx);
+        setCurrentQuestionId(parsed.id ?? null);
+        setCurrentOptionOrder(optionOrder);
         setRuntimeId((prev) => prev || data.runtimeId || runtimeToken);
         setCurrentQuestion(parsed);
         setSelected(null);
@@ -285,10 +297,14 @@ const Quiz: React.FC = () => {
         const q = data.question;
         if (!q) throw new Error('No question returned from session');
         const parsed: Question = {
+          id: q.id,
           text: q.text || q.question || 'Untitled',
           choices: Array.isArray(q.options) ? q.options : q.choices || [],
           answer: undefined,
         };
+        const optionOrder = Array.isArray(q.optionOrder) ? q.optionOrder.map((value: number) => Number(value)) : parsed.choices.map((_, idx) => idx);
+        setCurrentQuestionId(parsed.id ?? null);
+        setCurrentOptionOrder(optionOrder);
         setCurrentQuestion(parsed);
         setSelected(null);
         setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
@@ -307,10 +323,13 @@ const Quiz: React.FC = () => {
           }
           if (!q) throw new Error('No question returned');
           const parsed: Question = {
+            id: q.id,
             text: q.text || q.question || 'Untitled',
             choices: Array.isArray(q.choices) ? q.choices : q.options || [],
             answer: typeof q.answer === 'number' ? q.answer : undefined,
           };
+          setCurrentQuestionId(parsed.id ?? null);
+          setCurrentOptionOrder(parsed.choices.map((_, idx) => idx));
           setCurrentQuestion(parsed);
           setSelected(null);
             setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
@@ -345,6 +364,8 @@ const Quiz: React.FC = () => {
           }
         }
       const pick = local.length ? local[index % local.length] : { text: 'Fallback question', choices: ['A', 'B', 'C'], answer: 0 };
+      setCurrentQuestionId(null);
+      setCurrentOptionOrder(pick.choices?.map((_: any, idx: number) => idx) ?? null);
       setCurrentQuestion(pick);
       setError(err?.message ? String(err.message) : 'Failed to fetch question');
     } finally {
@@ -366,22 +387,30 @@ const Quiz: React.FC = () => {
 
     // Validate answer (server or client)
     let isCorrect = false;
-    if (runtimeId) {
+    const canonicalIndex = Array.isArray(currentOptionOrder) && currentOptionOrder[selected] !== undefined ? currentOptionOrder[selected] : selected;
+    const questionId = currentQuestionId || questionSet?.[current]?.questionId || null;
+    const sessionToken = runtimeId || sessionId || null;
+    if (questionId) {
       try {
-        const res = await fetch('/api/questions/answer', {
+        const payload: Record<string, any> = { answerIndex: canonicalIndex };
+        if (sessionToken) {
+          payload.sessionId = sessionToken;
+          payload.index = current;
+        }
+        const res = await fetch(`/api/questions/${encodeURIComponent(questionId)}/validate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: runtimeId, index: current, selectedIndex: selected })
+          body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
         isCorrect = !!data.correct;
       } catch (err) {
         console.warn('Validation failed, falling back to client check', err);
-        isCorrect = currentQuestion.answer === selected;
+        isCorrect = currentQuestion.answer === canonicalIndex;
       }
     } else {
-      isCorrect = currentQuestion.answer === selected;
+      isCorrect = currentQuestion.answer === canonicalIndex;
     }
 
     setAnswers((prev) => {

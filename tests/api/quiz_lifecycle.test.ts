@@ -97,6 +97,8 @@ describe('Quiz lifecycle (mocked stores)', () => {
     expect(startBody.question).toBeDefined();
 
     const runtimeId = startBody.runtimeId as string;
+    const questionId = startBody.question?.id as string;
+    expect(questionId).toBeDefined();
 
     // 3) get session question
     const getEv = makeEvent('GET', '/api/questions', undefined, { session: runtimeId, index: '0' });
@@ -105,12 +107,16 @@ describe('Quiz lifecycle (mocked stores)', () => {
     const getBody = JSON.parse(getRes.body as string);
     expect(getBody.question).toBeDefined();
 
-    // 4) answer the question (POST /api/questions/answer)
-    const ansEv = makeEvent('POST', '/api/questions/answer', { sessionId: runtimeId, index: 0, selectedIndex: 0 });
+    // 4) validate the question response via /api/questions/:id/validate
+    const correctAnswerRes = await route(makeEvent('GET', `/api/questions/${questionId}`));
+    expect(correctAnswerRes.statusCode).toBe(200);
+    const correctQuestion = JSON.parse(correctAnswerRes.body as string);
+    const answerIndex = correctQuestion.answerIndex ?? 0;
+    const ansEv = makeEvent('POST', `/api/questions/${questionId}/validate`, { sessionId: runtimeId, index: 0, answerIndex });
     const ansRes = await route(ansEv);
     expect(ansRes.statusCode).toBe(200);
     const ansBody = JSON.parse(ansRes.body as string);
-    expect(ansBody.correct).toBeDefined();
+    expect(ansBody.correct).toBe(true);
 
     // 5) finish quiz
     const finishEv = makeEvent('POST', `/api/quizzes/${quizId}/finish`, { answers: [1], summary: { score: 1 } });

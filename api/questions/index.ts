@@ -11,6 +11,7 @@ import {
 	QuestionRecord,
 } from './questionStore';
 import { getSessionQuestion } from '../quizzes/sessions';
+import { resolveSessionRuntimeId, sessionStore } from '../quizzes/sessionStore';
 
 export const listQuestions = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   const qs = (event.queryStringParameters || {}) as Record<string, string>;
@@ -164,8 +165,7 @@ export const updateQuestion = async (event: APIGatewayEvent): Promise<APIGateway
 export const validateQuestion = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const id = event.pathParameters?.id;
-    // get the answerIndex from body and match against stored question
-   if (!id) {
+		if (!id) {
 			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'id required' }) };
 		}
 		const question = await findQuestionById(id);
@@ -174,7 +174,19 @@ export const validateQuestion = async (event: APIGatewayEvent): Promise<APIGatew
 		}
 		const payload = parseBody(event);
 		const answerIndex = typeof payload.answerIndex === 'number' ? payload.answerIndex : null;
+		if (answerIndex === null) {
+			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'answerIndex required' }) };
+		}
 		const correct = answerIndex === question.answerIndex;
+		const sessionToken = typeof payload.sessionId === 'string' ? payload.sessionId : undefined;
+		const index = typeof payload.index === 'number' ? payload.index : undefined;
+		if (sessionToken && typeof index === 'number') {
+			const runtimeId = resolveSessionRuntimeId(sessionToken);
+			const sess = sessionStore.get(runtimeId);
+			if (sess && index >= 0 && index < sess.answers.length) {
+				sess.answers[index] = correct ? 1 : 0;
+			}
+		}
 		return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, correct }) };
 	} catch (err: any) {
 		return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };

@@ -26,7 +26,7 @@ function shuffleArray<T>(arr: T[]) {
 
 function buildClientQuestion(question: QuestionRecord, optionOrder: number[]) {
   const options = optionOrder.map((idx) => question.options[idx]);
-  return { id: question.id, text: question.text, options };
+  return { id: questionIdentifier(question), text: question.text, options, optionOrder };
 }
 
 export interface PreparedQuestionSet {
@@ -281,31 +281,6 @@ export const getSessionQuestion = async (event: APIGatewayEvent): Promise<APIGat
   }
 };
 
-export const validateAnswer = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
-  try {
-    const body = event.body ? JSON.parse(event.body) : {};
-    const { sessionId, index, selectedIndex } = body as { sessionId?: string; index?: number; selectedIndex?: number };
-    if (!sessionId || typeof index !== 'number' || typeof selectedIndex !== 'number') {
-      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'sessionId, index and selectedIndex are required' }) };
-    }
-    const runtimeId = resolveSessionRuntimeId(sessionId);
-    const sess = inMemorySessionStore.get(runtimeId);
-    if (!sess) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Session not found' }) };
-    if (index < 0 || index >= sess.ids.length) return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Invalid index' }) };
-    const qid = sess.ids[index];
-    const all = await loadQuestions();
-    const q = all.find((x) => String(x.id ?? x.sk) === String(qid));
-    if (!q) return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Question not found' }) };
-    const order = sess.optionOrders[index];
-    const mapped = order[selectedIndex];
-    const correct = q.answerIndex === mapped;
-    sess.answers[index] = correct ? 1 : 0;
-    return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correct }) };
-  } catch (err: any) {
-    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
-  }
-};
-
 export const getSessionSummary = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const qs = (event.queryStringParameters || {}) as Record<string, string>;
@@ -338,7 +313,6 @@ register('GET', '/api/sessions', getSession);
 register('GET', '/api/sessions/by-user', getSessionsByUser);
 register('GET', '/api/sessions/records', getSessionRecords);
 register('POST', '/api/questions/start', startSession);
-register('POST', '/api/questions/answer', validateAnswer);
 register('GET', '/api/questions/summary', getSessionSummary);
 
 export default {};
