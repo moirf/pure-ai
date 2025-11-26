@@ -161,6 +161,7 @@ const Quiz: React.FC = () => {
       setSelected(null);
       setStarted(true);
       setStartedAt(Date.now());
+      setPresented([]);
       if (!sessionId) {
         setError('A sessionId is required. Please set a Session ID in the header before starting.');
         setStarted(false);
@@ -201,12 +202,9 @@ const Quiz: React.FC = () => {
         });
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
-        // { runtimeId, index, question: { id, text, options } }
-        setRuntimeId(data.runtimeId || null);
-        const q = data.question;
-        const parsedQ = { text: q.text || q.question || 'Untitled', choices: q.options || q.choices || [], answer: undefined };
-        setCurrentQuestion(parsedQ);
-        setPresented((p) => { const copy = [...p]; copy[0] = { text: parsedQ.text, choices: parsedQ.choices }; return copy; });
+        const runtimeToken = data.runtimeId || null;
+        setRuntimeId(runtimeToken);
+        await fetchQuestion(0, setKey, { runtimeId: runtimeToken, quizId: newQuizId ?? quizId });
       } catch (err) {
         // fallback to previous behaviour
         await fetchQuestion(0, setKey);
@@ -220,11 +218,34 @@ const Quiz: React.FC = () => {
     }
   };
 
-  async function fetchQuestion(index: number, setKey?: string) {
+  async function fetchQuestion(index: number, setKey?: string, overrides?: { runtimeId?: string | null; quizId?: string | null }) {
     setLoadingQuestion(true);
     setError(null);
     try {
       const key = setKey ?? activeStep.key;
+      const runtimeToken = overrides?.runtimeId ?? runtimeId;
+      const quizToken = overrides?.quizId ?? quizId;
+
+      if (quizToken && runtimeToken) {
+        const res = await fetch(`/api/quizzes/${encodeURIComponent(quizToken)}?index=${index}`, {
+          headers: { 'x-session-id': runtimeToken }
+        });
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        const data = await res.json();
+        const q = data.question || data;
+        if (!q) throw new Error('No question returned from quiz');
+        const parsed: Question = {
+          text: q.text || q.question || 'Untitled',
+          choices: Array.isArray(q.options) ? q.options : q.choices || [],
+          answer: undefined,
+        };
+        setRuntimeId((prev) => prev || data.runtimeId || runtimeToken);
+        setCurrentQuestion(parsed);
+        setSelected(null);
+        setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
+        return;
+      }
+
       // If we have a server session, use the session endpoint which returns shuffled options but not the answer.
       // Prefer the ephemeral runtimeId for in-quiz calls. Fall back to sessionId for legacy behaviour.
       const sessionKey = runtimeId || sessionId;
