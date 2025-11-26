@@ -161,28 +161,6 @@ export const updateQuestion = async (event: APIGatewayEvent): Promise<APIGateway
 	}
 };
 
-export const deleteQuestion = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
-	try {
-		if (!isQuestionTableConfigured) {
-			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Questions table not configured for writes' }) };
-		}
-		const id = event.pathParameters?.id;
-		if (!id) {
-			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'id required' }) };
-		}
-		const existing = await findQuestionById(id);
-		if (!existing) {
-			return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Question not found' }) };
-		}
-		const table = ensureQuestionsTable();
-		await table.delete(getQuestionKey(existing, id));
-		invalidateQuestionsCache();
-		return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true }) };
-	} catch (err: any) {
-		return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
-	}
-};
-
 export const validateQuestion = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const id = event.pathParameters?.id;
@@ -194,13 +172,10 @@ export const validateQuestion = async (event: APIGatewayEvent): Promise<APIGatew
 		if (!question) {
 			return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Question not found' }) };
 		}
-    const payload = parseBody(event);
-    const answerIndex = typeof payload.answerIndex === 'number' ? payload.answerIndex : null;
-    if (answerIndex === question.answerIndex) {
-      return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, correct: true, explanation: question.explanation || null }) };
-    } else {
-      return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, correct: false, explanation: question.explanation || null }) };
-    }
+		const payload = parseBody(event);
+		const answerIndex = typeof payload.answerIndex === 'number' ? payload.answerIndex : null;
+		const correct = answerIndex === question.answerIndex;
+		return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, correct }) };
 	} catch (err: any) {
 		return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
 	}
