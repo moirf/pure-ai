@@ -185,78 +185,57 @@ const Quiz: React.FC = () => {
       }
 
       const runtimeToken = bootstrapSession?.runtimeId ?? null;
+      if (!runtimeToken) {
+        throw new Error('Failed to establish a runtime session for this quiz. Please try again.');
+      }
       if (!initialQuestionSet && newQuizId) {
         await refreshQuestionSet(newQuizId);
       }
-      if (runtimeToken) setRuntimeId(runtimeToken);
-      await fetchQuestion(0, setKey);
+      setRuntimeId(runtimeToken);
+      await fetchQuestion(0);
     } catch (err: any) {
       console.error('startSet error', err);
       setError(String(err?.message ?? err));
       setStarted(false);
+      setRuntimeId(null);
     } finally {
       setLoadingSet(false);
     }
   };
 
-  async function fetchQuestion(index: number, setKey?: string) {
+  async function fetchQuestion(index: number) {
     setLoadingQuestion(true);
     setError(null);
     setCurrentQuestionId(null);
     setCurrentOptionOrder(null);
     try {
-      const key = setKey ?? activeStep.key;
       const runtimeToken = runtimeId;
-      const orderedSet = questionSetRef.current ?? questionSet;
-
-     
-
-      if (runtimeToken) {
-        const res = await fetch(`/api/questions?session=${encodeURIComponent(runtimeToken)}&index=${index}`);
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        const data = await res.json();
-        const q = data.question || data;
-        if (!q) throw new Error('No question returned from quiz');
-        const parsed: Question = {
-          id: q.id,
-          text: q.text || q.question || 'Untitled',
-          choices: Array.isArray(q.options) ? q.options : q.choices || [],
-          answer: undefined,
-        };
-        const optionOrder = Array.isArray(q.optionOrder) ? q.optionOrder.map((value: number) => Number(value)) : parsed.choices.map((_, idx) => idx);
-        setCurrentQuestionId(parsed.id ?? null);
-        setCurrentOptionOrder(optionOrder);
-        setRuntimeId((prev) => prev || data.runtimeId || runtimeToken);
-        setCurrentQuestion(parsed);
-        setSelected(null);
-        setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
+      if (!runtimeToken) {
+        setError('Runtime session is no longer available. Ending quiz.');
+        setStarted(false);
+        setCurrentQuestion(null);
         return;
       }
 
-      // legacy / non-session fetch when runtime is unavailable
-      const res = await fetch(`/api/questions?set=${encodeURIComponent(key)}&index=${index}`);
+      const res = await fetch(`/api/questions?session=${encodeURIComponent(runtimeToken)}&index=${index}`);
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const data = await res.json();
-      // API may return an array or a single object.
-      let q: any = null;
-        if (Array.isArray(data)) {
-          // prefer the provided index if available, else take first
-          q = data[index] ?? data[0];
-        } else {
-          q = data;
-        }
-        if (!q) throw new Error('No question returned');
-        const parsed: Question = {
-          id: q.id,
-          text: q.text || q.question || 'Untitled',
-          choices: Array.isArray(q.choices) ? q.choices : q.options || [],
-          answer: typeof q.answer === 'number' ? q.answer : undefined,
-        };
-        setCurrentQuestionId(parsed.id ?? null);
-        setCurrentOptionOrder(parsed.choices.map((_, idx) => idx));
-        setCurrentQuestion(parsed);
-        setSelected(null);
-          setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
+      const q = data.question || data;
+      if (!q) throw new Error('No question returned from quiz');
+      const parsed: Question = {
+        id: q.id,
+        text: q.text || q.question || 'Untitled',
+        choices: Array.isArray(q.options) ? q.options : q.choices || [],
+        answer: undefined,
+      };
+      const optionOrder = Array.isArray(q.optionOrder) ? q.optionOrder.map((value: number) => Number(value)) : parsed.choices.map((_, idx) => idx);
+      setCurrentQuestionId(parsed.id ?? null);
+      setCurrentOptionOrder(optionOrder);
+      setRuntimeId((prev) => prev || data.runtimeId || runtimeToken);
+      setCurrentQuestion(parsed);
+      setSelected(null);
+      setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
+      return;
     } catch (err: any) {
       // fallback: pick a random question from local set
       console.warn('Failed to fetch question, falling back to local sample:', err?.message || err);
@@ -286,42 +265,41 @@ const Quiz: React.FC = () => {
     // Validate answer (server or client)
     let isCorrect = false;
     const canonicalIndex = Array.isArray(currentOptionOrder) && currentOptionOrder[selected] !== undefined ? currentOptionOrder[selected] : selected;
-    const questionId = currentQuestionId || questionSet?.[current]?.questionId || null;
     const runtimeToken = runtimeId;
-    if (runtimeToken) {
-      try {
-        const validateUrl = `/api/questions/${encodeURIComponent(runtimeToken)}/validate?index=${current}`;
-        const res = await fetch(validateUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ answerIndex: canonicalIndex })
-        });
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        const data = await res.json();
-        isCorrect = !!data.correct;
-      } catch (err) {
-        console.warn('Validation failed, falling back to client check', err);
-        isCorrect = currentQuestion.answer === canonicalIndex;
-      }
-    } else {
-      // If runtime session is missing (e.g., local fallback mode), rely on embedded answer when available.
-      isCorrect = currentQuestion.answer === canonicalIndex;
-      if (questionId && typeof currentQuestion.answer !== 'number') {
-        console.warn('Runtime session unavailable; unable to validate securely for question', questionId);
-      }
+    if (!runtimeToken) {
+      setError('Runtime session expired. Ending quiz.');
+      setStarted(false);
+      setCurrentQuestion(null);
+      return;
+    }
+    try {
+      const validateUrl = `/api/questions/${encodeURIComponent(runtimeToken)}/validate?index=${current}`;
+      const res = await fetch(validateUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answerIndex: canonicalIndex })
+      });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const data = await res.json();
+      isCorrect = !!data.correct;
+    } catch (err) {
+      console.warn('Validation failed, ending quiz', err);
+      setError('Failed to validate answer. Please restart the quiz.');
+      setStarted(false);
+      setCurrentQuestion(null);
+      return;
     }
 
-    setAnswers((prev) => {
-      const copy = [...prev];
-      copy[current] = isCorrect ? 1 : 0;
-      return copy;
-    });
+    const updatedAnswers = [...answers];
+    updatedAnswers[current] = isCorrect ? 1 : 0;
+    setAnswers(updatedAnswers);
     setPresented((p) => {
       const copy = [...p];
       copy[current] = Object.assign(copy[current] || {}, { selectedIndex: selected });
       return copy;
     });
-    if (isCorrect) setScore((s) => s + 1);
+    const updatedScore = isCorrect ? score + 1 : score;
+    setScore(updatedScore);
 
     const next = current + 1;
     if (next < totalQuestions) {
@@ -340,10 +318,10 @@ const Quiz: React.FC = () => {
 
     const finishedAt = Date.now();
     const durationMs = startedAt ? (finishedAt - startedAt) : undefined;
-    const total = answers.length;
-    const percent = Math.round((score / Math.max(1, total)) * 100);
-    const summary = { score, total, percent, durationMs, startedAt, finishedAt };
-    const payload = { quizId, answers, summary, quizType: activeStep.key, presented };
+    const total = updatedAnswers.length;
+    const percent = Math.round((updatedScore / Math.max(1, total)) * 100);
+    const summary = { score: updatedScore, total, percent, durationMs, startedAt, finishedAt };
+    const payload = { quizId, answers: updatedAnswers, summary, quizType: activeStep.key, presented };
 
     try {
       const finishUrl = `/api/quizzes/${encodeURIComponent(quizId)}/finish`;
