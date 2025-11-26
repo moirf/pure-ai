@@ -90,7 +90,12 @@ const Quiz: React.FC = () => {
   };
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [quizId, setQuizId] = useState<string | null>(null);
-  const [runtimeId, setRuntimeId] = useState<string | null>(null);
+  const [runtimeId, _setRuntimeId] = useState<string | null>(null);
+  const runtimeIdRef = useRef<string | null>(null);
+  const setRuntimeId = (next: string | null) => {
+    runtimeIdRef.current = next;
+    _setRuntimeId(next);
+  };
   const [answers, setAnswers] = useState<number[]>([]); // -1 = unanswered, 1 = correct, 0 = wrong
   const [current, setCurrent] = useState(0); // index in the sequence 0..(total-1)
   const [score, setScore] = useState(0);
@@ -209,7 +214,7 @@ const Quiz: React.FC = () => {
     setCurrentQuestionId(null);
     setCurrentOptionOrder(null);
     try {
-      const runtimeToken = runtimeId;
+      const runtimeToken = runtimeIdRef.current;
       if (!runtimeToken) {
         setError('Runtime session is no longer available. Ending quiz.');
         setStarted(false);
@@ -231,7 +236,9 @@ const Quiz: React.FC = () => {
       const optionOrder = Array.isArray(q.optionOrder) ? q.optionOrder.map((value: number) => Number(value)) : parsed.choices.map((_, idx) => idx);
       setCurrentQuestionId(parsed.id ?? null);
       setCurrentOptionOrder(optionOrder);
-      setRuntimeId((prev) => prev || data.runtimeId || runtimeToken);
+      if (!runtimeIdRef.current) {
+        setRuntimeId(data.runtimeId || runtimeToken || null);
+      }
       setCurrentQuestion(parsed);
       setSelected(null);
       setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
@@ -265,7 +272,7 @@ const Quiz: React.FC = () => {
     // Validate answer (server or client)
     let isCorrect = false;
     const canonicalIndex = Array.isArray(currentOptionOrder) && currentOptionOrder[selected] !== undefined ? currentOptionOrder[selected] : selected;
-    const runtimeToken = runtimeId;
+    const runtimeToken = runtimeIdRef.current;
     if (!runtimeToken) {
       setError('Runtime session expired. Ending quiz.');
       setStarted(false);
