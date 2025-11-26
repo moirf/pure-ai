@@ -158,6 +158,7 @@ const Header: React.FC = () => {
             <Link to="/quiz" className="hover:underline whitespace-nowrap">Take Quiz</Link>
             <Link to="/projects" className="hover:underline whitespace-nowrap">Projects</Link>
             <Link to="/galleries" className="hover:underline whitespace-nowrap">Galleries</Link>
+            <Link to="/memes" className="hover:underline whitespace-nowrap">Meme Creator</Link>
 
             <Link to="/profile" className="hover:underline whitespace-nowrap">Profile</Link>
           </nav>
@@ -212,6 +213,7 @@ const Header: React.FC = () => {
             <Link to="/" onClick={() => setOpen(false)} className="hover:underline py-2">Home</Link>
             <Link to="/projects" onClick={() => setOpen(false)} className="hover:underline py-2">Projects</Link>
             <Link to="/galleries" onClick={() => setOpen(false)} className="hover:underline py-2">Galleries</Link>
+            <Link to="/memes" onClick={() => setOpen(false)} className="hover:underline py-2">Meme Creator</Link>
             <Link to="/quiz" onClick={() => setOpen(false)} className="hover:underline py-2">Quiz</Link>
             <Link to="/profile" onClick={() => setOpen(false)} className="hover:underline py-2">Profile</Link>
           </div>
