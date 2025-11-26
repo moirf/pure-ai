@@ -77,10 +77,11 @@ describe('Quiz lifecycle (mocked stores)', () => {
     const createRes = await route(createEv);
     expect(createRes.statusCode).toBe(200);
     const parsedCreate = JSON.parse(createRes.body as string);
-    const { quizId, questionSet } = parsedCreate;
+    const { quizId, questionSet, session } = parsedCreate;
     expect(typeof quizId).toBe('string');
     expect(Array.isArray(questionSet)).toBe(true);
     expect(questionSet).toHaveLength(1);
+    expect(session).toBeDefined();
 
     // calling create again with the same session now issues a fresh quizId
     const createResSecond = await route(makeEvent('POST', '/api/quizzes', createPayload));
@@ -88,31 +89,25 @@ describe('Quiz lifecycle (mocked stores)', () => {
     const parsedSecond = JSON.parse(createResSecond.body as string);
     expect(parsedSecond.quizId).not.toBe(quizId);
 
-    // 2) start a session (POST /api/questions/start) - server expects quizId + sessionId
-    const startEv = makeEvent('POST', '/api/questions/start', { count: 1, quizId, sessionId: 'S-ABC' });
-    const startRes = await route(startEv);
-    expect(startRes.statusCode).toBe(200);
-    const startBody = JSON.parse(startRes.body as string);
-    expect(startBody.runtimeId).toBeDefined();
-    expect(startBody.question).toBeDefined();
+    // 2) runtime session now supplied directly by createQuiz
+    expect(session?.runtimeId).toBeDefined();
+    const runtimeId = session.runtimeId as string;
 
-    const runtimeId = startBody.runtimeId as string;
-    const questionId = startBody.question?.id as string;
-    expect(questionId).toBeDefined();
-
-    // 3) get session question
+    // 3) fetch first question via session token
     const getEv = makeEvent('GET', '/api/questions', undefined, { session: runtimeId, index: '0' });
     const getRes = await route(getEv);
     expect(getRes.statusCode).toBe(200);
     const getBody = JSON.parse(getRes.body as string);
     expect(getBody.question).toBeDefined();
+    const questionId = getBody.question?.id as string;
+    expect(questionId).toBeDefined();
 
-    // 4) validate the question response via /api/questions/:id/validate
+    // 4) validate the question response via /api/questions/:runtimeId/validate
     const correctAnswerRes = await route(makeEvent('GET', `/api/questions/${questionId}`));
     expect(correctAnswerRes.statusCode).toBe(200);
     const correctQuestion = JSON.parse(correctAnswerRes.body as string);
     const answerIndex = correctQuestion.answerIndex ?? 0;
-    const ansEv = makeEvent('POST', `/api/questions/${questionId}/validate`, { sessionId: runtimeId, index: 0, answerIndex });
+    const ansEv = makeEvent('POST', `/api/questions/${runtimeId}/validate`, { answerIndex }, { index: '0' });
     const ansRes = await route(ansEv);
     expect(ansRes.statusCode).toBe(200);
     const ansBody = JSON.parse(ansRes.body as string);

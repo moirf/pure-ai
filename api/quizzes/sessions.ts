@@ -35,6 +35,12 @@ export interface PreparedQuestionSet {
   questionStatus: QuizQuestionEntry[];
 }
 
+export interface RuntimeSessionInitResult {
+  runtimeId: string;
+  index: number;
+  question: ReturnType<typeof buildClientQuestion>;
+}
+
 function questionIdentifier(question: QuestionRecord): string {
   return String(question.id ?? question.sk ?? question.pk);
 }
@@ -136,6 +142,57 @@ export async function prepareQuestionSet(params: {
   return { selected, ids, questionStatus: normalizedStatus };
 }
 
+export async function initializeRuntimeSession(params: {
+  preparedSet: PreparedQuestionSet;
+  allocation?: Record<string, number>;
+  quizId?: string;
+  sessionId?: string;
+  skipQuizUpdate?: boolean;
+}): Promise<RuntimeSessionInitResult> {
+  const { preparedSet, allocation, quizId, sessionId, skipQuizUpdate } = params;
+  if (!preparedSet?.selected?.length) {
+    throw new Error('No questions available for session');
+  }
+
+  const optionOrders = preparedSet.selected.map((q) => shuffleArray(q.options.map((_, i) => i)));
+  const runtimeId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const sess: any = {
+    id: runtimeId,
+    ids: preparedSet.ids,
+    optionOrders,
+    answers: new Array(preparedSet.ids.length).fill(-1),
+    allocation,
+  };
+  inMemorySessionStore.set(runtimeId, sess);
+  if (sessionId) registerSessionAlias(String(sessionId), runtimeId);
+
+  if (quizId && !skipQuizUpdate) {
+    const quizSnapshot = {
+      allocation: sess.allocation || allocation || {},
+      questionIds: preparedSet.ids,
+      totalQuestions: preparedSet.ids.length,
+      questions: preparedSet.questionStatus,
+    };
+    try {
+      if (sessionId) {
+        await quizStore.saveQuizRecord(quizId, { sessionId: sessionId, ...quizSnapshot });
+      } else {
+        const existing = await quizStore.getQuizRecord(quizId).catch(() => null);
+        if (!existing || !existing.sessionId) {
+          await quizStore.saveQuizRecord(quizId, quizSnapshot);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to attach session to quiz', quizId, e);
+    }
+  }
+
+  const firstQuestion = preparedSet.selected[0];
+  if (!firstQuestion) throw new Error('Failed to load first question');
+  const firstOrder = optionOrders[0];
+  return { runtimeId, index: 0, question: buildClientQuestion(firstQuestion, firstOrder) };
+}
+
 export const allocateSession = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
@@ -214,46 +271,16 @@ export const startSession = async (event: APIGatewayEvent): Promise<APIGatewayPr
       questionIds: storedQuestionIds,
       questionStatus: existingQuiz?.questions ?? null,
     });
-    const { selected, ids, questionStatus } = setResult;
-    if (!selected.length) {
-      return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to allocate questions for session' }) };
-    }
-    const optionOrders = selected.map((q) => shuffleArray(q.options.map((_, i) => i)));
-    const runtimeId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const sess: any = { id: runtimeId, ids, optionOrders, answers: new Array(ids.length).fill(-1), allocation };
-    inMemorySessionStore.set(runtimeId, sess);
-    if (sessionId) registerSessionAlias(String(sessionId), runtimeId);
-
-    if (quizId) {
-      const quizSnapshot = {
-        allocation: sess.allocation || allocation || {},
-        questionIds: ids,
-        totalQuestions: ids.length,
-        questions: questionStatus,
-      };
-      try {
-        if (sessionId) {
-          await quizStore.saveQuizRecord(quizId, { sessionId: sessionId, ...quizSnapshot });
-        } else {
-          const existing = await quizStore.getQuizRecord(quizId).catch(() => null);
-          if (!existing || !existing.sessionId) {
-            await quizStore.saveQuizRecord(quizId, quizSnapshot);
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to attach session to quiz', quizId, e);
-      }
-    }
-
-    const firstQuestion = selected[0];
-    if (!firstQuestion) {
-      return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to load first question' }) };
-    }
-    const firstOrder = optionOrders[0];
+    const sessionInit = await initializeRuntimeSession({
+      preparedSet: setResult,
+      allocation,
+      quizId,
+      sessionId,
+    });
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ runtimeId, index: 0, question: buildClientQuestion(firstQuestion, firstOrder) })
+      body: JSON.stringify(sessionInit)
     };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
@@ -312,7 +339,6 @@ register('POST', '/api/sessions/allocate', allocateSession);
 register('GET', '/api/sessions', getSession);
 register('GET', '/api/sessions/by-user', getSessionsByUser);
 register('GET', '/api/sessions/records', getSessionRecords);
-register('POST', '/api/questions/start', startSession);
 register('GET', '/api/questions/summary', getSessionSummary);
 
 export default {};

@@ -3,8 +3,8 @@ import { register } from '../../api/router';
 import * as quizStore from './quizStore';
 import type { QuizDbRecord, QuizQuestionEntry } from './quizStore';
 import { allocCounter, formatQuizId } from './sessionStore';
-import { prepareQuestionSet, getSessionQuestion } from './sessions';
-import type { PreparedQuestionSet } from './sessions';
+import { prepareQuestionSet, getSessionQuestion, initializeRuntimeSession } from './sessions';
+import type { PreparedQuestionSet, RuntimeSessionInitResult } from './sessions';
 
 function getHeader(headers: Record<string, string | undefined> | null | undefined, name: string) {
   if (!headers) return undefined;
@@ -73,10 +73,25 @@ export const createQuiz = async (event: APIGatewayEvent): Promise<APIGatewayProx
     }
 
     await quizStore.saveQuizRecord(quizId, payload);
+
+    let sessionInit: RuntimeSessionInitResult | null = null;
+    if (preparedSet) {
+      try {
+        sessionInit = await initializeRuntimeSession({
+          preparedSet,
+          allocation,
+          quizId,
+          sessionId,
+          skipQuizUpdate: true,
+        });
+      } catch (runtimeErr) {
+        console.warn('createQuiz: failed to initialize runtime session', quizId, runtimeErr);
+      }
+    }
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quizId, ok: true, questionSet: preparedSet ? preparedSet.questionStatus : null }),
+      body: JSON.stringify({ quizId, ok: true, questionSet: preparedSet ? preparedSet.questionStatus : null, session: sessionInit }),
     };
   } catch (err: any) {
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };

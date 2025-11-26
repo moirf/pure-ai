@@ -54,41 +54,11 @@ function getDescriptionForKey(key: string) {
     case 'gkt25':
       return 'Compensation & negotiation: research, positioning, and building leverage.';
     case 'math':
-      return 'Career growth: demonstrating impact, leadership and mentorship to earn promotion.';
+      return 'Math fundamentals: arithmetic speed, accuracy, and reasoning drills.';
     default:
-      return 'Learn and grow with targeted micro-lessons for this topic.';
+      return 'Sharpen your skills with curated practice sets and instant feedback.';
   }
 }
-
-function calculateProgress(key: string, started: boolean, questions: Question[], current: number) {
-  if (!started || questions.length === 0) return '0%';
-  const pct = Math.round(((current) / questions.length) * 100);
-  return `${pct}%`;
-}
-
-const Avatar: React.FC<{ initials: string; color?: string }> = ({ initials, color = 'bg-blue-200' }) => (
-  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold ${color}`}>
-    {initials}
-  </div>
-);
-
-const StepItem = React.forwardRef<HTMLLIElement, { step: typeof steps[number]; active?: boolean; onClick?: () => void }>(
-  ({ step, active, onClick }, ref) => (
-    <li
-      ref={ref}
-      onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-4 cursor-pointer ${active ? 'bg-blue-50 border-l-4 border-blue-400' : ''}`}
-    >
-      <div className="text-2xl" aria-hidden>
-        {step.icon}
-      </div>
-      <div className="flex-1">
-        <div className={`text-sm ${active ? 'text-blue-600' : 'text-gray-800'}`}>{step.title}</div>
-      </div>
-    </li>
-  )
-);
-StepItem.displayName = 'StepItem';
 
 const InfoCard: React.FC<{ tone?: 'green' | 'purple'; title: string; children: React.ReactNode }> = ({ tone = 'green', title, children }) => {
   const base = 'p-6 rounded-xl shadow-sm';
@@ -112,7 +82,12 @@ const Quiz: React.FC = () => {
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
   const [currentOptionOrder, setCurrentOptionOrder] = useState<number[] | null>(null);
-  const [questionSet, setQuestionSet] = useState<QuestionSet[] | null>(null);
+  const [questionSet, _setQuestionSet] = useState<QuestionSet[] | null>(null);
+  const questionSetRef = useRef<QuestionSet[] | null>(null);
+  const setQuestionSet = (next: QuestionSet[] | null) => {
+    questionSetRef.current = next;
+    _setQuestionSet(next);
+  };
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [quizId, setQuizId] = useState<string | null>(null);
   const [runtimeId, setRuntimeId] = useState<string | null>(null);
@@ -182,6 +157,7 @@ const Quiz: React.FC = () => {
 
       let newQuizId: string | null = quizId;
       let initialQuestionSet: QuestionSet[] | null = null;
+      let bootstrapSession: { runtimeId?: string | null } | null = null;
       const allocation = { [activeStep.key]: totalQuestions } as Record<string, number>;
       try {
         const createRes = await fetch('/api/quizzes', {
@@ -197,6 +173,10 @@ const Quiz: React.FC = () => {
             initialQuestionSet = createJson.questionSet as QuestionSet[];
             setQuestionSet(initialQuestionSet);
           }
+          if (createJson.session && typeof createJson.session.runtimeId === 'string') {
+            bootstrapSession = createJson.session;
+            setRuntimeId(createJson.session.runtimeId);
+          }
         } else {
           console.warn('Failed to create quiz on server', createRes.status);
         }
@@ -204,24 +184,12 @@ const Quiz: React.FC = () => {
         console.warn('Failed to create quiz', e);
       }
 
-      // Try to start a server session. If it fails, fall back to local fetch.
-      try {
-        const res = await fetch('/api/questions/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count: totalQuestions, quizId: newQuizId ?? quizId, sessionId, allocation })
-        });
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        const data = await res.json();
-        const runtimeToken = data.runtimeId || null;
-        setRuntimeId(runtimeToken);
-        let hydratedSet = initialQuestionSet;
-        if (!hydratedSet) hydratedSet = await refreshQuestionSet(newQuizId ?? quizId);
-        await fetchQuestion(0, setKey, { runtimeId: runtimeToken, quizId: newQuizId ?? quizId, questionSet: hydratedSet ?? undefined });
-      } catch (err) {
-        // fallback to previous behaviour
-        await fetchQuestion(0, setKey);
+      const runtimeToken = bootstrapSession?.runtimeId ?? null;
+      if (!initialQuestionSet && newQuizId) {
+        await refreshQuestionSet(newQuizId);
       }
+      if (runtimeToken) setRuntimeId(runtimeToken);
+      await fetchQuestion(0, setKey);
     } catch (err: any) {
       console.error('startSet error', err);
       setError(String(err?.message ?? err));
@@ -231,42 +199,20 @@ const Quiz: React.FC = () => {
     }
   };
 
-  async function fetchQuestion(index: number, setKey?: string, overrides?: { runtimeId?: string | null; quizId?: string | null; questionSet?: QuestionSet[] | null }) {
+  async function fetchQuestion(index: number, setKey?: string) {
     setLoadingQuestion(true);
     setError(null);
     setCurrentQuestionId(null);
     setCurrentOptionOrder(null);
     try {
       const key = setKey ?? activeStep.key;
-      const runtimeToken = overrides?.runtimeId ?? runtimeId;
-      const quizToken = overrides?.quizId ?? quizId;
-      const orderedSet = overrides?.questionSet ?? questionSet;
+      const runtimeToken = runtimeId;
+      const orderedSet = questionSetRef.current ?? questionSet;
 
-      const questionFromSet = orderedSet?.[index];
-      if (questionFromSet?.questionId) {
-        const questionRes = await fetch(`/api/questions/${encodeURIComponent(questionFromSet.questionId)}`);
-        if (questionRes.ok) {
-          const payload = await questionRes.json();
-          const parsed: Question = {
-            id: payload.id || payload.sk || questionFromSet.questionId,
-            text: payload.text || payload.question || 'Untitled',
-            choices: Array.isArray(payload.options) ? payload.options : payload.choices || [],
-            answer: undefined,
-          };
-          setCurrentQuestionId(parsed.id ?? null);
-          setCurrentOptionOrder(parsed.choices.map((_, idx) => idx));
-          setCurrentQuestion(parsed);
-          setSelected(null);
-          setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
-          if (!questionSet && orderedSet) setQuestionSet(orderedSet);
-          return;
-        }
-      }
+     
 
-      if (quizToken && runtimeToken) {
-        const res = await fetch(`/api/quizzes/${encodeURIComponent(quizToken)}?index=${index}`, {
-          headers: { 'x-session-id': runtimeToken }
-        });
+      if (runtimeToken) {
+        const res = await fetch(`/api/questions?session=${encodeURIComponent(runtimeToken)}&index=${index}`);
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
         const q = data.question || data;
@@ -287,82 +233,34 @@ const Quiz: React.FC = () => {
         return;
       }
 
-      // If we have a server session, use the session endpoint which returns shuffled options but not the answer.
-      // Prefer the ephemeral runtimeId for in-quiz calls. Fall back to sessionId for legacy behaviour.
-      const sessionKey = runtimeId || sessionId;
-      if (sessionKey) {
-        const res = await fetch(`/api/questions?session=${encodeURIComponent(sessionKey)}&index=${index}`);
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        const data = await res.json();
-        const q = data.question;
-        if (!q) throw new Error('No question returned from session');
+      // legacy / non-session fetch when runtime is unavailable
+      const res = await fetch(`/api/questions?set=${encodeURIComponent(key)}&index=${index}`);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const data = await res.json();
+      // API may return an array or a single object.
+      let q: any = null;
+        if (Array.isArray(data)) {
+          // prefer the provided index if available, else take first
+          q = data[index] ?? data[0];
+        } else {
+          q = data;
+        }
+        if (!q) throw new Error('No question returned');
         const parsed: Question = {
           id: q.id,
           text: q.text || q.question || 'Untitled',
-          choices: Array.isArray(q.options) ? q.options : q.choices || [],
-          answer: undefined,
+          choices: Array.isArray(q.choices) ? q.choices : q.options || [],
+          answer: typeof q.answer === 'number' ? q.answer : undefined,
         };
-        const optionOrder = Array.isArray(q.optionOrder) ? q.optionOrder.map((value: number) => Number(value)) : parsed.choices.map((_, idx) => idx);
         setCurrentQuestionId(parsed.id ?? null);
-        setCurrentOptionOrder(optionOrder);
+        setCurrentOptionOrder(parsed.choices.map((_, idx) => idx));
         setCurrentQuestion(parsed);
         setSelected(null);
-        setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
-      } else {
-        // legacy / non-session fetch
-        const res = await fetch(`/api/questions?set=${encodeURIComponent(key)}&index=${index}`);
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        const data = await res.json();
-        // API may return an array or a single object.
-        let q: any = null;
-          if (Array.isArray(data)) {
-            // prefer the provided index if available, else take first
-            q = data[index] ?? data[0];
-          } else {
-            q = data;
-          }
-          if (!q) throw new Error('No question returned');
-          const parsed: Question = {
-            id: q.id,
-            text: q.text || q.question || 'Untitled',
-            choices: Array.isArray(q.choices) ? q.choices : q.options || [],
-            answer: typeof q.answer === 'number' ? q.answer : undefined,
-          };
-          setCurrentQuestionId(parsed.id ?? null);
-          setCurrentOptionOrder(parsed.choices.map((_, idx) => idx));
-          setCurrentQuestion(parsed);
-          setSelected(null);
-            setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
-      }
+          setPresented((p) => { const copy = [...p]; copy[index] = { text: parsed.text, choices: parsed.choices }; return copy; });
     } catch (err: any) {
       // fallback: pick a random question from local set
       console.warn('Failed to fetch question, falling back to local sample:', err?.message || err);
       const local = QUESTION_SETS[activeStep.key] || [];
-        // Flush any pending quiz results stored in localStorage. Called on mount.
-        async function flushPendingResults() {
-          try {
-            const key = 'pendingQuizResults';
-            const raw = localStorage.getItem(key);
-            if (!raw) return;
-            const arr = JSON.parse(raw) as any[];
-            if (!Array.isArray(arr) || arr.length === 0) return;
-            const remaining: any[] = [];
-            for (const item of arr) {
-              try {
-                if (!item?.quizId) throw new Error('quizId missing on pending payload');
-                const finishUrl = `/api/quizzes/${encodeURIComponent(item.quizId)}/finish`;
-                const res = await fetch(finishUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) });
-                if (!res.ok) throw new Error(`Server returned ${res.status}`);
-              } catch (e) {
-                remaining.push(item);
-              }
-            }
-            if (remaining.length > 0) localStorage.setItem(key, JSON.stringify(remaining));
-            else localStorage.removeItem(key);
-          } catch (err) {
-            console.warn('flushPendingResults failed', err);
-          }
-        }
       const pick = local.length ? local[index % local.length] : { text: 'Fallback question', choices: ['A', 'B', 'C'], answer: 0 };
       setCurrentQuestionId(null);
       setCurrentOptionOrder(pick.choices?.map((_: any, idx: number) => idx) ?? null);
@@ -389,18 +287,14 @@ const Quiz: React.FC = () => {
     let isCorrect = false;
     const canonicalIndex = Array.isArray(currentOptionOrder) && currentOptionOrder[selected] !== undefined ? currentOptionOrder[selected] : selected;
     const questionId = currentQuestionId || questionSet?.[current]?.questionId || null;
-    const sessionToken = runtimeId || sessionId || null;
-    if (questionId) {
+    const runtimeToken = runtimeId;
+    if (runtimeToken) {
       try {
-        const payload: Record<string, any> = { answerIndex: canonicalIndex };
-        if (sessionToken) {
-          payload.sessionId = sessionToken;
-          payload.index = current;
-        }
-        const res = await fetch(`/api/questions/${encodeURIComponent(questionId)}/validate`, {
+        const validateUrl = `/api/questions/${encodeURIComponent(runtimeToken)}/validate?index=${current}`;
+        const res = await fetch(validateUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ answerIndex: canonicalIndex })
         });
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
@@ -410,7 +304,11 @@ const Quiz: React.FC = () => {
         isCorrect = currentQuestion.answer === canonicalIndex;
       }
     } else {
+      // If runtime session is missing (e.g., local fallback mode), rely on embedded answer when available.
       isCorrect = currentQuestion.answer === canonicalIndex;
+      if (questionId && typeof currentQuestion.answer !== 'number') {
+        console.warn('Runtime session unavailable; unable to validate securely for question', questionId);
+      }
     }
 
     setAnswers((prev) => {

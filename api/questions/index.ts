@@ -164,29 +164,35 @@ export const updateQuestion = async (event: APIGatewayEvent): Promise<APIGateway
 
 export const validateQuestion = async (event: APIGatewayEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const id = event.pathParameters?.id;
-		if (!id) {
-			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'id required' }) };
+		const runtimeParam = event.pathParameters?.runtimeId;
+		const indexParam = event.queryStringParameters?.index;
+		if (!runtimeParam) {
+			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'runtimeId required' }) };
 		}
-		const question = await findQuestionById(id);
-		if (!question) {
-			return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Question not found' }) };
+		const index = Number(indexParam);
+		if (!Number.isFinite(index)) {
+			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'index query parameter required' }) };
 		}
 		const payload = parseBody(event);
 		const answerIndex = typeof payload.answerIndex === 'number' ? payload.answerIndex : null;
 		if (answerIndex === null) {
 			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'answerIndex required' }) };
 		}
-		const correct = answerIndex === question.answerIndex;
-		const sessionToken = typeof payload.sessionId === 'string' ? payload.sessionId : undefined;
-		const index = typeof payload.index === 'number' ? payload.index : undefined;
-		if (sessionToken && typeof index === 'number') {
-			const runtimeId = resolveSessionRuntimeId(sessionToken);
-			const sess = sessionStore.get(runtimeId);
-			if (sess && index >= 0 && index < sess.answers.length) {
-				sess.answers[index] = correct ? 1 : 0;
-			}
+		const runtimeId = resolveSessionRuntimeId(runtimeParam);
+		const sess = sessionStore.get(runtimeId);
+		if (!sess) {
+			return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'runtime session not found' }) };
 		}
+		if (index < 0 || index >= sess.ids.length) {
+			return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'invalid index' }) };
+		}
+		const questionId = sess.ids[index];
+		const question = await findQuestionById(String(questionId));
+		if (!question) {
+			return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Question not found' }) };
+		}
+		const correct = answerIndex === question.answerIndex;
+		sess.answers[index] = correct ? 1 : 0;
 		return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, correct }) };
 	} catch (err: any) {
 		return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: String(err?.message || err) }) };
@@ -195,7 +201,7 @@ export const validateQuestion = async (event: APIGatewayEvent): Promise<APIGatew
 
 register('GET', '/api/questions', listQuestions);
 register('GET', '/api/questions/:id', getQuestion);
-register('POST', '/api/questions/:id/validate', validateQuestion);
+register('POST', '/api/questions/:runtimeId/validate', validateQuestion);
 register('POST', '/api/questions', addQuestion);
 register('PUT', '/api/questions/:id', updateQuestion);
 register('POST', '/api/questions/seed', seedQuestions);

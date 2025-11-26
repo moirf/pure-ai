@@ -70,6 +70,8 @@ describe('Quiz API basic routes', () => {
     expect(typeof body.quizId).toBe('string');
     expect(Array.isArray(body.questionSet)).toBe(true);
     expect(body.questionSet.length).toBeGreaterThan(0);
+    expect(body.session).toBeDefined();
+    expect(typeof body.session.runtimeId === 'string').toBe(true);
   });
 
   test('GET /api/quizzes/:quizId returns 404 when quiz not found', async () => {
